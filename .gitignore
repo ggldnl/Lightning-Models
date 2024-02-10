@@ -159,7 +159,7 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-/models/feedforward/dataset/
-/models/feedforward/lightning_logs/
-/models/transformer/dataset/
-/models/transformer/lightning_logs/
+/models/feedforward/dataset/*
+/models/feedforward/lightning_logs/*
+/models/transformer_legacy/dataset/*
+/models/transformer_legacy/lightning_logs/*
