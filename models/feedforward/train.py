@@ -1,4 +1,4 @@
-from dataset import CustomMNISTDataModule
+from data import CustomMNISTDataModule
 import pytorch_lightning as pl
 from model import FeedForward
 from config import *
