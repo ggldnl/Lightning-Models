@@ -1,6 +1,6 @@
 import pytorch_lightning as pl
-import torch.nn as nn
 import torch
+import torch.nn as nn
 
 
 class FeedForward(pl.LightningModule):
@@ -27,4 +27,4 @@ class FeedForward(pl.LightningModule):
         self.linear_2 = nn.Linear(d_ff, d_model)  # W_2 and b_2
 
     def forward(self, x):
-        return self.linear_2(self.dropout(nn.ReLU(self.linear_1(x))))
+        return self.linear_2(self.dropout(torch.relu(self.linear_1(x))))

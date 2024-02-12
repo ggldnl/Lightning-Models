@@ -1,5 +1,6 @@
 import pytorch_lightning as pl
-from layer_norm import LayerNorm
+
+from models.transformer.blocks.layer_norm import LayerNorm
 
 
 class Decoder(pl.LightningModule):

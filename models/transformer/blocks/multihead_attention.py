@@ -3,7 +3,7 @@ import torch.nn as nn
 import math
 
 
-class MultiHeadAttention(pl.LightningDataModule):
+class MultiHeadAttention(pl.LightningModule):
     #    Multi head self attention module
     #
     #                          Multi-Head Attention
