@@ -9,6 +9,7 @@ from blocks.multihead_attention import MultiHeadAttention
 from blocks.feedforward import FeedForward
 from blocks.projection import Projection
 import torch.nn as nn
+import torch
 
 
 class Transformer(pl.LightningModule):
@@ -116,3 +117,31 @@ class Transformer(pl.LightningModule):
                 nn.init.xavier_uniform_(p)
 
         return transformer
+
+
+if __name__ == '__main__':
+
+    # We have a batch of two sample inputs and the two respective targets
+
+    # 1 is for SOS
+    # 0 is for PAD
+    # 2 is for EOS
+    x = torch.tensor([[1, 5, 6, 4, 3, 9, 5, 2, 0], [1, 8, 7, 3, 4, 5, 6, 7, 2]])
+    trg = torch.tensor([[1, 7, 4, 3, 5, 9, 2, 0], [1, 5, 6, 2, 4, 7, 6, 2]])
+
+    source_vocab_size = 10
+    target_vocab_size = 10
+    source_sequence_length = 10
+    target_sequence_length = 10
+
+    model = Transformer.build(
+        source_vocab_size,
+        target_vocab_size,
+        source_sequence_length,
+        target_sequence_length,
+        embedding_size=10,
+        heads=2
+    )
+
+    out = model(x, trg[:, :-1])
+    print(out)
