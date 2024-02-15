@@ -2,6 +2,8 @@ from kaggle.api.kaggle_api_extended import KaggleApi
 from urllib.parse import urlsplit
 import requests
 import zipfile
+import shutil
+import gzip
 import csv
 import re
 import os
@@ -130,7 +132,7 @@ def extract_google_drive_file_id(url):
         return None
 
 
-def extract_resource(zip_path, directory):
+def extract_zip(zip_path, directory):
     """
     Extract the zip file in the specified directory.
 
@@ -143,8 +145,7 @@ def extract_resource(zip_path, directory):
     """
 
     # Create the extraction directory if it doesn't exist
-    if not os.path.exists(directory):
-        os.makedirs(directory)
+    os.makedirs(directory, exist_ok=True)
 
     # Open the zip file
     with zipfile.ZipFile(zip_path, "r") as zip_ref:
@@ -177,3 +178,27 @@ def read_tsv(file_path, skip_header=False):
             data.append(row)
 
     return data
+
+
+def extract_gz(input_file, output_file):
+    """
+    Extracts a gzipped file into a specified directory.
+
+    Parameters:
+    - gz_file_path (str): Path to the gzipped file.
+    - output_directory (str): Directory to extract the contents.
+
+    Returns:
+    - bool: True if the input file exist, false otherwise (TODO: fix this)
+    """
+
+    # Ensure the input file exists
+    if os.path.exists(input_file):
+
+        # Extract the gz file into the output directory
+        with gzip.open(input_file, 'rb') as f_in, open(output_file, 'wb') as f_out:
+            shutil.copyfileobj(f_in, f_out)
+
+        return True
+
+    return False
