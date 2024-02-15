@@ -1,7 +1,7 @@
-from data import CustomMNISTDataModule
+from models.feedforward.MNIST_classification.data import CustomMNISTDataModule
 import pytorch_lightning as pl
-from model import FeedForward
-from config import *
+from models.feedforward.model import FeedForward
+from models.feedforward.MNIST_classification.config import *
 
 
 if __name__ == "__main__":
@@ -20,5 +20,4 @@ if __name__ == "__main__":
     trainer = pl.Trainer(min_epochs=1, max_epochs=NUM_EPOCHS, precision=PRECISION)
 
     trainer.fit(model, datamodule)
-    trainer.validate(model, datamodule)
     trainer.test(model, datamodule)

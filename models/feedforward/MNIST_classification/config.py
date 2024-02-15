@@ -5,8 +5,8 @@ OUTPUT_SIZE = 10
 
 # Train related hyperparameters
 BATCH_SIZE = 64
-NUM_EPOCHS = 3
-LEARNING_RATE = 0.001
+NUM_EPOCHS = 10
+LEARNING_RATE = 2e-4
 
 # Dataset related hyperparameters
 DATA_DIR = "dataset/"

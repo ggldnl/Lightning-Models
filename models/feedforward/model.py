@@ -1,5 +1,5 @@
-import pytorch_lightning as pl
 import torch.nn.functional as F
+import pytorch_lightning as pl
 from torch import nn, optim
 import torchmetrics
 
@@ -10,60 +10,75 @@ class FeedForward(pl.LightningModule):
         input_size,
         hidden_size,
         output_size,
-        activation_fn=F.relu,
-        loss_fn=nn.CrossEntropyLoss,
         learning_rate=0.001,
     ):
 
         super(FeedForward, self).__init__()
 
+        # Define the layers
         self.fc1 = nn.Linear(input_size, hidden_size)
+        self.act = nn.ReLU()
         self.fc2 = nn.Linear(hidden_size, output_size)
-        self.activation_fn = activation_fn
-        self.loss_fn = loss_fn()
         self.learning_rate = learning_rate
 
-        # Metrics
-        self.accuracy = torchmetrics.Accuracy(
-            task="multiclass", num_classes=output_size
-        )
+        # Define the loss function
+        self.loss_function = nn.CrossEntropyLoss()
+
+        # Define metrics
+        self.accuracy = torchmetrics.Accuracy(task="multiclass", num_classes=output_size)
         self.f1_score = torchmetrics.F1Score(task="multiclass", num_classes=output_size)
 
     def forward(self, x):
-        x = self.activation_fn(self.fc1(x))
+        x = self.fc1(x)
+        x = self.act(x)
         x = self.fc2(x)
-        return x
+        return F.log_softmax(x, dim=1)
+
+    def common_step(self, batch, batch_idx):
+
+        x, y = batch['image'], batch['label']
+
+        logits = self.forward(x)
+        loss = self.loss_function(logits, y)
+
+        target = y.argmax(dim=1)
+        preds = logits.argmax(dim=1)
+
+        return loss, preds, target
 
     def training_step(self, batch, batch_idx):
-        loss, scores, y = self._common_step(batch, batch_idx)
-        accuracy = self.accuracy(scores, y)
-        f1_score = self.f1_score(scores, y)
-        self.log_dict(
-            {
-                "train_loss": loss,
-                "train_accuracy": accuracy,
-                "train_f1_score": f1_score,
-            },
-            on_step=False,
-            on_epoch=True,
-            prog_bar=True,
-        )
+
+        loss, output, target = self.common_step(batch, batch_idx)
+
+        # self.log('train_loss', loss, prog_bar=True)
+
         return loss
 
     def validation_step(self, batch, batch_idx):
-        loss, scores, y = self._common_step(batch, batch_idx)
+
+        loss, output, target = self.common_step(batch, batch_idx)
+
+        accuracy = self.accuracy(output, target)
+        f1_score = self.f1_score(output, target)
+
+        self.log('val_loss', loss)
+        self.log('val_accuracy', accuracy, prog_bar=True)
+        self.log('val_f1', f1_score, prog_bar=True)
+
         return loss
 
     def test_step(self, batch, batch_idx):
-        loss, scores, y = self._common_step(batch, batch_idx)
-        return loss
 
-    def _common_step(self, batch, batch_idx):
-        x, y = batch
-        x = x.reshape(x.size(0), -1)
-        scores = self.forward(x)
-        loss = self.loss_fn(scores, y)
-        return loss, scores, y
+        loss, output, target = self.common_step(batch, batch_idx)
+
+        accuracy = self.accuracy(output, target)
+        f1_score = self.f1_score(output, target)
+
+        self.log('test_loss', loss)
+        self.log('test_accuracy', accuracy, prog_bar=True)
+        self.log('test_f1', f1_score, prog_bar=True)
+
+        return loss
 
     def configure_optimizers(self):
         return optim.Adam(self.parameters(), lr=self.learning_rate)

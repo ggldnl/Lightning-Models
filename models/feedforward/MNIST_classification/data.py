@@ -1,11 +1,10 @@
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data import random_split
-from torchvision import transforms
 import pytorch_lightning as pl
-from PIL import Image
 import numpy as np
-import requests
-import zipfile
+import config
+import torch
+import utils
 import csv
 import os
 
@@ -23,25 +22,28 @@ class CustomMNISTDataset(Dataset):
 
     def __getitem__(self, index):
 
-        label = self.data[index][0]
-        image = np.array(self.data[index][1:])
+        label = int(self.data[index][0])
+        image = np.array(self.data[index][1:]).astype(np.uint8)
 
-        # Create a PIL Image with the read array
-        image = Image.fromarray(image)
+        # Create a PIL Image with the read array and convert to grayscale
+        # image = Image.fromarray(image.reshape((28, 28)), mode='L')
 
         # Apply transformations if provided
         if self.transform:
             image = self.transform(image)
 
-        return image, label
+        return {
+            'image': torch.tensor(image) / 255.0,
+            'label': torch.tensor([1.0 if i == label else 0.0 for i in range(10)])
+        }
 
 
 class CustomMNISTDataModule(pl.LightningDataModule):
     def __init__(
         self,
         data_dir,
-        batch_size,
-        num_workers,
+        batch_size=config.BATCH_SIZE,
+        num_workers=config.NUM_WORKERS,
         download=False,
     ):
 
@@ -54,9 +56,9 @@ class CustomMNISTDataModule(pl.LightningDataModule):
         # 10,000 test examples and labels. Each row consists of 785 values:
         # the first value is the label (a number from 0 to 9) and the remaining
         # 784 values are the pixel values (a number from 0 to 255).
-        self.resource_url = r"https://www.kaggle.com/datasets/oddrationale/mnist-in-csv/download?datasetVersionNumber=2"
-        self.test_file = os.path.join(data_dir, "archive/mnist_test.csv")
-        self.train_file = os.path.join(data_dir, "archive/mnist_train.csv")
+        self.resource_name = "oddrationale/mnist-in-csv"
+        self.test_file = os.path.join(data_dir, "data/mnist_test.csv")
+        self.train_file = os.path.join(data_dir, "data/mnist_train.csv")
         self.data_dir = data_dir
         self.download = download
 
@@ -68,52 +70,18 @@ class CustomMNISTDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
 
     @staticmethod
-    def download_resource(url, filepath):
-
-        # Make the request to download the file
-        response = requests.get(url)
-
-        # Check if the request was successful (status code 200)
-        if response.status_code == 200:
-            # Write the content to the file
-            with open(filepath, "wb") as file:
-                file.write(response.content)
-            print(f"Downloaded '{url}' to '{filepath}'.")
-            return True
-        else:
-            print(f"Failed to download '{url}'. Status code: {response.status_code}.")
-            return False
-
-    @staticmethod
-    def extract_resource(zip_path, directory):
-
-        # Create the extraction directory if it doesn't exist
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-
-        # Open the zip file
-        with zipfile.ZipFile(zip_path, "r") as zip_ref:
-            # Extract all contents to the specified directory
-            zip_ref.extractall(directory)
-
-        print(f"Extracted '{zip_path}' to '{directory}'")
-
-    @staticmethod
-    def read_csv(csv_file):
+    def read_csv(csv_file, skip_header=True):
         data = []
         with open(csv_file, "r") as file:
             csv_reader = csv.reader(file)
 
             # Skip the header
-            next(csv_reader)
+            if skip_header:
+                next(csv_reader)
 
             for row in csv_reader:
-                # Convert values to integers and normalize pixel values
-                label = int(row[0])
-                pixels = np.array(
-                    [int(val) / 255.0 for val in row[1:]], dtype=np.float32
-                )
-                data.append([label] + pixels.tolist())
+                data.append(row)
+
         return data
 
     def prepare_data(self):
@@ -121,25 +89,26 @@ class CustomMNISTDataModule(pl.LightningDataModule):
         if self.download:
 
             # Take the parent directory of the data dir
-            parent_dir = os.path.dirname(self.data_dir)
-            resource_filename = os.path.join(parent_dir, "MNIST.zip")
-            self.download_resource(self.resource_url, resource_filename)
-            self.extract_resource(resource_filename, self.data_dir)
+            resource_filename = os.path.join(self.data_dir, "data")
+            utils.download_kaggle(self.resource_name, resource_filename)
+            # utils.extract_zip(resource_filename, self.data_dir)
 
-    def setup(self, stage):
+    def setup(self, stage=None):
 
         train_val_data = self.read_csv(self.train_file)
         test_data = self.read_csv(self.test_file)
 
         train_val_dataset = CustomMNISTDataset(
-            train_val_data, transform=transforms.Compose([transforms.ToTensor()])
+            train_val_data,
+            # transform=transforms.Compose([transforms.ToTensor()])
         )
         self.train_dataset, self.val_dataset = random_split(
             train_val_dataset, [50000, 10000]
         )
 
         self.test_dataset = CustomMNISTDataset(
-            test_data, transform=transforms.Compose([transforms.ToTensor()])
+            test_data,
+            # transform=transforms.Compose([transforms.ToTensor()])
         )
 
     def train_dataloader(self):
@@ -165,3 +134,23 @@ class CustomMNISTDataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             shuffle=False,
         )
+
+
+if __name__ == '__main__':
+
+    datamodule = CustomMNISTDataModule(
+        config.DATA_DIR,
+        download=True
+    )
+    datamodule.prepare_data()
+    datamodule.setup()
+
+    train_loader = datamodule.train_dataloader()
+
+    for batch in train_loader:
+        images = batch['image']
+        labels = batch['label']
+        print(f'Images shape: {images.shape}')
+        print(images[0])
+        print(labels[0])
+        break
