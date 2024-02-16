@@ -22,7 +22,7 @@ class Transformer(pl.LightningModule):
                  target_position_encoding,
                  projection,
                  learning_rate,
-                 loss_fn=nn.CrossEntropyLoss()
+                 loss_fn
                  ):
 
         super(Transformer, self).__init__()
@@ -104,6 +104,8 @@ class Transformer(pl.LightningModule):
         projection_output = self.project(decoder_output)  # (batch, seq_len, target_vocab_size)
 
         # Compare to the label and compute loss
+        projection_output = projection_output.view(-1, projection_output.shape[-1])
+        label = label.view(-1).long()
         loss = self.loss_fn(projection_output, label)
         accuracy = 0
 
@@ -111,7 +113,7 @@ class Transformer(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
 
-        loss = self.common_step(batch, batch_idx)
+        loss, accuracy = self.common_step(batch, batch_idx)
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -138,6 +140,7 @@ class Transformer(pl.LightningModule):
               source_sequence_length,
               target_sequence_length,
               learning_rate,
+              loss_fn,
               embedding_size: int = 512,
               num_encoders: int = 6,  # Number of encoder blocks
               num_decoders: int = 6,  # Number of decoder blocks
@@ -193,7 +196,8 @@ class Transformer(pl.LightningModule):
             source_position_encoding,
             target_position_encoding,
             projection_layer,
-            learning_rate
+            learning_rate,
+            loss_fn
         )
 
         # Initialize the model parameters to train faster (otherwise they are initialized with
