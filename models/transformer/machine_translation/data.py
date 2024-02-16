@@ -31,14 +31,14 @@ class OPUSDataset(Dataset):
 
         # Take the special tokens from the tokenizers (just to simplify the code)
         if source_tokenizer is not None:
-            self.source_pad_token = self.source_tokenizer.token_to_id(self.source_tokenizer.pad_token)
-            self.source_sos_token = self.source_tokenizer.token_to_id(self.source_tokenizer.sos_token)
-            self.source_eos_token = self.source_tokenizer.token_to_id(self.source_tokenizer.eos_token)
+            self.source_pad_token = self.source_tokenizer.pad_token_id
+            self.source_sos_token = self.source_tokenizer.sos_token_id
+            self.source_eos_token = self.source_tokenizer.eos_token_id
 
         if target_tokenizer is not None:
-            self.target_pad_token = self.target_tokenizer.token_to_id(self.target_tokenizer.pad_token)
-            self.target_sos_token = self.target_tokenizer.token_to_id(self.target_tokenizer.sos_token)
-            self.target_eos_token = self.target_tokenizer.token_to_id(self.target_tokenizer.eos_token)
+            self.target_pad_token = self.target_tokenizer.pad_token_id
+            self.target_sos_token = self.target_tokenizer.sos_token_id
+            self.target_eos_token = self.target_tokenizer.eos_token_id
 
     def __len__(self):
         return len(self.data)

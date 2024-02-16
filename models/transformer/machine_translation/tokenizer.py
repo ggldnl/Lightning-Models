@@ -16,7 +16,15 @@ class WordLevelTokenizer:
         self.pad_token = pad_token
         self.sos_token = sos_token
         self.eos_token = eos_token
+
+        self.unk_token_id = 0
+        self.pad_token_id = 1
+        self.sos_token_id = 2
+        self.eos_token_id = 3
+
         self.special_tokens = [unk_token, pad_token, sos_token, eos_token]
+        self.special_tokens_ids = [0, 1, 2, 3]
+
         self.min_frequency = min_frequency
         self.word2index = {}
         self.index2word = {}
@@ -42,8 +50,8 @@ class WordLevelTokenizer:
         self.word2index = {word: idx + len(self.special_tokens) + 1 for idx, word in enumerate(unique_tokens)}
 
         # Add the special tokens
-        for idx, token in enumerate(self.special_tokens):
-            self.word2index[token] = idx
+        for token, token_id in zip(self.special_tokens, self.special_tokens_ids):
+            self.word2index[token] = token_id
 
         # Populate index2word dictionary
         self.index2word = {idx: word for word, idx in self.word2index.items()}

@@ -2,6 +2,7 @@ from models.transformer.model import Transformer
 from tokenizer import WordLevelTokenizer
 from data import OPUSDataModule
 import pytorch_lightning as pl
+import torch.nn as nn
 import config
 import os
 
@@ -33,6 +34,11 @@ def create_tokenizer(stage='source'):  # stage = ['source', 'target']
 
 if __name__ == '__main__':
 
+    # Configure logging level
+    import logging
+    logging.getLogger("lightning.pytorch").setLevel(logging.DEBUG)
+
+    # Create or get tokenizers
     source_tokenizer_path = r'tokenizers/tokenizer_source.json'
     target_tokenizer_path = r'tokenizers/tokenizer_target.json'
 
@@ -69,11 +75,21 @@ if __name__ == '__main__':
         target_vocab_size=target_tokenizer.vocab_size,
         source_sequence_length=config.MAX_SEQ_LEN,
         target_sequence_length=config.MAX_SEQ_LEN,
-        learning_rate=config.LEARNING_RATE
+        learning_rate=config.LEARNING_RATE,
+        embedding_size=config.EMBED_DIM,
+        num_encoders=config.NUM_ENCODERS,
+        num_decoders=config.NUM_DECODERS,
+        dropout=config.DROPOUT,
+        heads=config.HEADS,
+        d_ff=config.D_FF,
+        loss_fn=nn.CrossEntropyLoss(ignore_index=source_tokenizer.pad_token_id, label_smoothing=0.1)
     )
 
     # Create the trainer
-    trainer = pl.Trainer(min_epochs=1, max_epochs=config.NUM_EPOCHS, precision=config.PRECISION)
+    trainer = pl.Trainer(
+        min_epochs=1, max_epochs=config.NUM_EPOCHS,
+        precision=config.PRECISION
+    )
 
     trainer.fit(model, datamodule)
     trainer.test(model, datamodule)

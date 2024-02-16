@@ -1,12 +1,12 @@
 
-EMBED_DIM = 512
-NUM_ENCODERS = 6,  # Number of encoder blocks
-NUM_DECODERS = 6,  # Number of decoder blocks
-DROPOUT = 0.1,
-HEADS = 8,
-D_FF = 2048,
+EMBED_DIM = 100
+NUM_ENCODERS = 2  # Number of encoder blocks
+NUM_DECODERS = 6  # Number of decoder blocks
+DROPOUT = 0.1
+HEADS = 2
+D_FF = 500
 
-BATCH_SIZE = 64
+BATCH_SIZE = 16
 NUM_EPOCHS = 10
 NUM_WORKERS = 4
 LEARNING_RATE = 2e-4
