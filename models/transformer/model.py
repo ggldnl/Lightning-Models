@@ -1,15 +1,14 @@
 import pytorch_lightning as pl
-from blocks.encoder import Encoder
-from blocks.decoder import Decoder
-from blocks.encoder_block import EncoderBlock
-from blocks.decoder_block import DecoderBlock
-from blocks.input_embedding import InputEmbeddings
-from blocks.positional_encoding import PositionalEncoding
-from blocks.multihead_attention import MultiHeadAttention
-from blocks.feedforward import FeedForward
-from blocks.projection import Projection
-import torch.nn as nn
-import torch
+from models.transformer.blocks.encoder import Encoder
+from models.transformer.blocks.decoder import Decoder
+from models.transformer.blocks.encoder_block import EncoderBlock
+from models.transformer.blocks.decoder_block import DecoderBlock
+from models.transformer.blocks.input_embedding import InputEmbeddings
+from models.transformer.blocks.positional_encoding import PositionalEncoding
+from models.transformer.blocks.multihead_attention import MultiHeadAttention
+from models.transformer.blocks.feedforward import FeedForward
+from models.transformer.blocks.projection import Projection
+from torch import nn, optim
 
 
 class Transformer(pl.LightningModule):
@@ -21,7 +20,9 @@ class Transformer(pl.LightningModule):
                  target_embedding,  # Output embedding for the output sequence (language 2)
                  source_position_encoding,
                  target_position_encoding,
-                 projection
+                 projection,
+                 learning_rate,
+                 loss_fn=nn.CrossEntropyLoss()
                  ):
 
         super(Transformer, self).__init__()
@@ -33,6 +34,8 @@ class Transformer(pl.LightningModule):
         self.source_position_encoding = source_position_encoding
         self.target_position_encoding = target_position_encoding
         self.projection = projection
+        self.learning_rate = learning_rate
+        self.loss_fn = loss_fn
 
     def encode(self, source, source_mask):
         source = self.source_embedding(source)
@@ -47,12 +50,94 @@ class Transformer(pl.LightningModule):
     def project(self, x):
         return self.projection(x)
 
+    """
+    def generate_source_mask(self, source):
+        # For each element, if the element is a source_pad then it will be set to 0
+        return (source != self.source_pad).unsqueeze(0).unsqueeze(0).int(),  # (1, 1, sequence_len)
+
+    def generate_target_mask(self, target):
+        return ((target != self.source_pad).unsqueeze(0).unsqueeze(0).int() &
+                causal_mask(target.size(0)))
+    
+    def infer(self, source):
+
+        # Generate source mask
+        source_mask = self.generate_source_mask(source)
+
+        # Encoder forward pass
+        encoder_output = self.encode(source, source_mask)
+
+        # Initialize target sequence for decoding (e.g., start with SOS token)
+        target_sequence = torch.tensor([self.target_sos])
+
+        # Generate target mask for the initial token
+        target_mask = causal_mask(target_sequence.size(0))
+
+        # Perform step-by-step decoding
+        for _ in range(self.max_target_length):  # Define max_target_length based on your application
+            # Decoder forward pass for the current token
+            decoder_output = self.decode(encoder_output, source_mask, target_sequence, target_mask)
+
+            # Project to output space
+            output_token = self.project(decoder_output[-1:])  # Taking the last generated token
+
+            # Append the generated token to the target sequence
+            target_sequence = torch.cat([target_sequence, output_token.argmax(dim=-1)])
+
+            # Update target mask for the newly generated token
+            target_mask = causal_mask(target_sequence.size(0))
+
+        return target_sequence[1:]  # Exclude the SOS token from the output
+    """
+
+    def common_step(self, batch, batch_idx):
+
+        encoder_input = batch['encoder_input']  # (batch, seq_len)
+        decoder_input = batch['decoder_input']  # (batch, seq_len)
+        encoder_mask = batch['encoder_mask']  # (batch, 1, 1, seq_len)
+        decoder_mask = batch['decoder_mask']  # (batch, 1, seq_len, seq_len)
+        label = batch['label']  # (batch, seq_len)
+
+        # Run the input through the model
+        encoder_output = self.encode(encoder_input, encoder_mask)  # (batch, seq_len, embedding_size)
+        decoder_output = self.decode(encoder_output, encoder_mask, decoder_input, decoder_mask)  # (batch, seq_len, embedding_size)
+        projection_output = self.project(decoder_output)  # (batch, seq_len, target_vocab_size)
+
+        # Compare to the label and compute loss
+        loss = self.loss_fn(projection_output, label)
+        accuracy = 0
+
+        return loss, accuracy
+
+    def training_step(self, batch, batch_idx):
+
+        loss = self.common_step(batch, batch_idx)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+
+        loss, accuracy = self.common_step(batch, batch_idx)
+        self.log("val_loss", loss, prog_bar=True)
+        self.log("val_acc", accuracy, prog_bar=True)
+        return loss
+
+    def test_step(self, batch, batch_idx):
+
+        loss, accuracy = self.common_step(batch, batch_idx)
+        self.log("test_loss", loss, prog_bar=True)
+        self.log("test_acc", accuracy, prog_bar=True)
+        return loss
+
+    def configure_optimizers(self):
+        return optim.Adam(self.parameters(), lr=self.learning_rate)
+
     @classmethod
     def build(cls,
               source_vocab_size,
               target_vocab_size,
               source_sequence_length,
               target_sequence_length,
+              learning_rate,
               embedding_size: int = 512,
               num_encoders: int = 6,  # Number of encoder blocks
               num_decoders: int = 6,  # Number of decoder blocks
@@ -107,7 +192,8 @@ class Transformer(pl.LightningModule):
             target_embedding,
             source_position_encoding,
             target_position_encoding,
-            projection_layer
+            projection_layer,
+            learning_rate
         )
 
         # Initialize the model parameters to train faster (otherwise they are initialized with
@@ -117,31 +203,3 @@ class Transformer(pl.LightningModule):
                 nn.init.xavier_uniform_(p)
 
         return transformer
-
-
-if __name__ == '__main__':
-
-    # We have a batch of two sample inputs and the two respective targets
-
-    # 1 is for SOS
-    # 0 is for PAD
-    # 2 is for EOS
-    x = torch.tensor([[1, 5, 6, 4, 3, 9, 5, 2, 0], [1, 8, 7, 3, 4, 5, 6, 7, 2]])
-    trg = torch.tensor([[1, 7, 4, 3, 5, 9, 2, 0], [1, 5, 6, 2, 4, 7, 6, 2]])
-
-    source_vocab_size = 10
-    target_vocab_size = 10
-    source_sequence_length = 10
-    target_sequence_length = 10
-
-    model = Transformer.build(
-        source_vocab_size,
-        target_vocab_size,
-        source_sequence_length,
-        target_sequence_length,
-        embedding_size=10,
-        heads=2
-    )
-
-    out = model(x, trg[:, :-1])
-    print(out)
