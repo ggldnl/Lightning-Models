@@ -50,7 +50,12 @@ class FeedForward(pl.LightningModule):
 
         loss, output, target = self.common_step(batch, batch_idx)
 
-        # self.log('train_loss', loss, prog_bar=True)
+        accuracy = self.accuracy(output, target)
+        f1_score = self.f1_score(output, target)
+
+        self.log('train_loss', loss)
+        self.log('train_accuracy', accuracy, prog_bar=True)
+        self.log('train_f1', f1_score, prog_bar=True)
 
         return loss
 
@@ -70,13 +75,6 @@ class FeedForward(pl.LightningModule):
     def test_step(self, batch, batch_idx):
 
         loss, output, target = self.common_step(batch, batch_idx)
-
-        accuracy = self.accuracy(output, target)
-        f1_score = self.f1_score(output, target)
-
-        self.log('test_loss', loss)
-        self.log('test_accuracy', accuracy, prog_bar=True)
-        self.log('test_f1', f1_score, prog_bar=True)
 
         return loss
 

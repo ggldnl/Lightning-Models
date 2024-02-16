@@ -16,8 +16,11 @@ if __name__ == "__main__":
         INPUT_SIZE, HIDDEN_SIZE, OUTPUT_SIZE, learning_rate=LEARNING_RATE
     )
 
+    # Init ModelCheckpoint callback, monitoring 'val_loss'
+    checkpoint_callback = pl.callbacks.ModelCheckpoint(monitor='val_loss')
+
     # Define the trainer
-    trainer = pl.Trainer(min_epochs=1, max_epochs=NUM_EPOCHS, precision=PRECISION)
+    trainer = pl.Trainer(min_epochs=1, max_epochs=NUM_EPOCHS, precision=PRECISION, callbacks=[checkpoint_callback])
 
     trainer.fit(model, datamodule)
     trainer.test(model, datamodule)
