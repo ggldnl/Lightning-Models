@@ -43,7 +43,7 @@ class WordLevelTokenizer:
             else:
                 token_frequency[token] = 1
 
-        # Remove duplicates
+        # Remove tokens with low frequency
         unique_tokens = [token for token, freq in token_frequency.items() if freq >= self.min_frequency]
 
         # Populate word2index dictionary
