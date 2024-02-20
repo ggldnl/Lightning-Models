@@ -21,6 +21,10 @@ def download_resource(url, filepath):
     - bool: True if the download was successful, False otherwise.
     """
 
+    parent_folder = os.path.dirname(filepath)
+    if not os.path.exists(parent_folder):
+        os.makedirs(parent_folder)
+
     response = requests.get(url)
 
     # Check if the request was successful (status code 200)
