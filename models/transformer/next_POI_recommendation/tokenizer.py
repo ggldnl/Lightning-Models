@@ -107,6 +107,6 @@ class POISequenceTokenizer:
 
     @classmethod
     def load(cls, path):
-        tokenizer = WordLevelTokenizer()
+        tokenizer = POISequenceTokenizer()
         tokenizer.restore(path)
         return tokenizer
