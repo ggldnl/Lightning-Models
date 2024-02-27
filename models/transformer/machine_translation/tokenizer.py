@@ -46,7 +46,7 @@ class WordLevelTokenizer:
         unique_tokens = [token for token, freq in token_frequency.items() if freq >= self.min_frequency]
 
         # Populate word2index dictionary
-        self.word2index = {word: idx + len(self.special_tokens) + 1 for idx, word in enumerate(unique_tokens)}
+        self.word2index = {word: idx + len(self.special_tokens) for idx, word in enumerate(unique_tokens)}
 
         # Add the special tokens
         for token, token_id in zip(self.special_tokens, self.special_tokens_ids):
