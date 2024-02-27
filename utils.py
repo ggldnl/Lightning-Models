@@ -159,7 +159,7 @@ def extract_zip(zip_path, directory):
     return True
 
 
-def read_tsv(file_path, skip_header=False):
+def read_tsv(file_path, skip_header=False, encoding='utf-8'):
     """
     Reads a TSV (Tab-Separated Values) file and returns a 2D array.
 
@@ -172,7 +172,7 @@ def read_tsv(file_path, skip_header=False):
     """
 
     data = []
-    with open(file_path, 'r', newline='', encoding='utf-8') as file:
+    with open(file_path, 'r', newline='', encoding=encoding) as file:
         tsv_reader = csv.reader(file, delimiter='\t')
 
         if skip_header:
