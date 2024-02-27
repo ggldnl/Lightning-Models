@@ -104,7 +104,7 @@ class Transformer(pl.LightningModule):
         projection_output = self.project(decoder_output)  # (batch, seq_len, target_vocab_size)
 
         # Compare to the label and compute loss
-        projection_output = projection_output.view(-1, projection_output.shape[-1])
+        projection_output = projection_output.view(-1, self.target_embedding.vocab_size)
         label = label.view(-1).long()
         loss = self.loss_fn(projection_output, label)
         accuracy = 0
