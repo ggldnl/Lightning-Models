@@ -73,12 +73,22 @@ class WordLevelTokenizer:
         return [self.word2index[token] for token in tokens]
 
     def encode(self, sentence):
+        """
+        Given a sentence, returns a list of token ids. The unknown token
+        is used in place of unrecognized tokens.
+        """
 
         # Convert the sentence into tokens and then into input ids
         sentence_tokens = self.sentence_to_tokens(sentence)
         sentence_ids = self.tokens_to_ids(sentence_tokens)
 
         return sentence_ids
+
+    def decode(self, token_ids):
+        """
+        Given a list of token ids, returns a sentence.
+        """
+        return ' '.join([self.id_to_token(token_id) for token_id in token_ids])
 
     def save(self, path):
 
