@@ -1,4 +1,6 @@
 import pytorch_lightning as pl
+import torch
+
 from models.transformer.blocks.encoder import Encoder
 from models.transformer.blocks.decoder import Decoder
 from models.transformer.blocks.encoder_block import EncoderBlock
@@ -42,53 +44,61 @@ class Transformer(pl.LightningModule):
         source = self.source_position_encoding(source)
         return self.encoder(source, source_mask)
 
-    def decode(self, encoder_output, source_mask, target, target_mask):
+    def decode(self, source, source_mask, target, target_mask):
         target = self.target_embedding(target)
         target = self.target_position_encoding(target)
-        return self.decoder(target, encoder_output, source_mask, target_mask)
+        return self.decoder(target, source, source_mask, target_mask)
 
     def project(self, x):
         return self.projection(x)
 
-    """
-    def generate_source_mask(self, source):
-        # For each element, if the element is a source_pad then it will be set to 0
-        return (source != self.source_pad).unsqueeze(0).unsqueeze(0).int(),  # (1, 1, sequence_len)
+    def translate(self, input_sequence, max_output_length=50, target_sos_token_id=0, target_eos_token_id=1):
+        """
+        Input sequence contain token ids
+        """
 
-    def generate_target_mask(self, target):
-        return ((target != self.source_pad).unsqueeze(0).unsqueeze(0).int() &
-                causal_mask(target.size(0)))
-    
-    def infer(self, source):
+        with torch.no_grad():
 
-        # Generate source mask
-        source_mask = self.generate_source_mask(source)
+            # Encode the input sequence and input mask to get encoder output
+            encoder_input = torch.tensor([input_sequence])
+            encoder_mask = torch.ones_like(encoder_input).unsqueeze(1).unsqueeze(1)
+            encoder_output = self.encode(encoder_input, encoder_mask)
 
-        # Encoder forward pass
-        encoder_output = self.encode(source, source_mask)
+            # Initialize decoder input with SOS token and the decoder mask
+            decoder_input = torch.tensor([[target_sos_token_id]])
+            decoder_mask = torch.ones_like(decoder_input).unsqueeze(1).unsqueeze(2)
 
-        # Initialize target sequence for decoding (e.g., start with SOS token)
-        target_sequence = torch.tensor([self.target_sos])
+            generated_tokens = []
 
-        # Generate target mask for the initial token
-        target_mask = causal_mask(target_sequence.size(0))
+            for _ in range(max_output_length):
 
-        # Perform step-by-step decoding
-        for _ in range(self.max_target_length):  # Define max_target_length based on your application
-            # Decoder forward pass for the current token
-            decoder_output = self.decode(encoder_output, source_mask, target_sequence, target_mask)
+                # Decode one step at a time
+                decoder_output = self.decode(encoder_output, encoder_mask, decoder_input, decoder_mask)
 
-            # Project to output space
-            output_token = self.project(decoder_output[-1:])  # Taking the last generated token
+                # Project the decoder output to get probabilities over the target vocabulary
+                projection_output = self.project(decoder_output)
 
-            # Append the generated token to the target sequence
-            target_sequence = torch.cat([target_sequence, output_token.argmax(dim=-1)])
+                # Get the token with the maximum probability
+                predicted_token_id = projection_output[0][0].argmax().item()
 
-            # Update target mask for the newly generated token
-            target_mask = causal_mask(target_sequence.size(0))
+                # Break if EOS token is predicted or max length is reached
+                if predicted_token_id == target_eos_token_id or len(generated_tokens) >= max_output_length:
+                    break
 
-        return target_sequence[1:]  # Exclude the SOS token from the output
-    """
+                # Append the predicted token to the generated sequence
+                generated_tokens.append(predicted_token_id)
+
+                # print(f'Predicted token: {predicted_token_id}')
+
+                # Append the generated token to the decoder input for the next step
+                predicted_token = torch.tensor([[predicted_token_id]])
+                decoder_input = torch.cat([decoder_input, predicted_token])
+
+                # Update the attention mask for the decoder
+                decoder_mask = torch.ones_like(decoder_input).unsqueeze(1).unsqueeze(2)
+
+            # Return the generated tokens excluding the SOS token
+            return generated_tokens[:1]
 
     def common_step(self, batch, batch_idx):
 
