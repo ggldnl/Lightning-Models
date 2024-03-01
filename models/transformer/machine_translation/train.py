@@ -88,7 +88,8 @@ if __name__ == '__main__':
     # Create the trainer
     trainer = pl.Trainer(
         min_epochs=1, max_epochs=config.NUM_EPOCHS,
-        precision=config.PRECISION
+        # precision=config.PRECISION,
+        accelerator='auto'
     )
 
     trainer.fit(model, datamodule)
