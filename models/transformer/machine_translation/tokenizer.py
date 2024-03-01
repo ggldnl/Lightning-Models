@@ -1,4 +1,8 @@
+from nltk.tokenize import word_tokenize
+from nltk.corpus import stopwords
 import pickle
+import nltk
+import os
 
 
 class WordLevelTokenizer:
@@ -29,10 +33,17 @@ class WordLevelTokenizer:
         self.index2word = {}
         self.vocab_size = 0
 
+    @staticmethod
+    def tokenize_sentence(sentence):
+        tokens = [token.lower() for token in word_tokenize(sentence)]
+        return tokens
+
     def train(self, corpus):
 
         # This is a simple tokenizer, no need to implement something fancy, we can use the split method
-        all_tokens = [token.lower() for sentence in corpus for token in sentence.split()]
+        # along with some basic cleaning procedure
+        # all_tokens = [token.lower() for sentence in corpus for token in sentence.split()]
+        all_tokens = [token.lower() for sentence in corpus for token in self.tokenize_sentence(sentence)]
 
         # Compute the frequency for each token
         token_frequency = {}
@@ -67,7 +78,8 @@ class WordLevelTokenizer:
         return self.index2word[token_id]
 
     def sentence_to_tokens(self, sentence):
-        return [token if token in self.word2index else self.unk_token for token in sentence.split()]
+        sentence_tokens = [token.lower() for token in self.tokenize_sentence(sentence)]
+        return [token if token in self.word2index else self.unk_token for token in sentence_tokens]
 
     def tokens_to_ids(self, tokens):
         return [self.word2index[token] for token in tokens]
@@ -117,33 +129,3 @@ class WordLevelTokenizer:
         tokenizer = WordLevelTokenizer()
         tokenizer.restore(path)
         return tokenizer
-
-
-if __name__ == '__main__':
-
-    from data import OPUSDataModule
-    import config
-    import os
-
-    # Build a datamodule WITHOUT tokenizers
-    datamodule = OPUSDataModule(
-        config.DATA_DIR,
-        max_seq_len=config.MAX_SEQ_LEN,
-        download=False
-    )
-    datamodule.prepare_data()  # Download the data
-    datamodule.setup()  # Setup it
-
-    # Take the italian corpus (we need an iterable)
-    train_dataloader = datamodule.train_dataloader()
-    it_corpus = []
-    for batch in train_dataloader:
-        # batch['target_text'] is a list of strings
-        it_corpus.extend(batch['target_text'])
-
-    # Use the corpus to train the tokenizer
-    tokenizer = WordLevelTokenizer()
-    tokenizer.train(it_corpus)
-
-    # Save the tokenizer
-    tokenizer.save(os.path.join(config.TOK_DIR, 'tokenizer_it.json'))
