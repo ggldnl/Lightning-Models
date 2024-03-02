@@ -33,6 +33,8 @@ class WordLevelTokenizer:
         self.index2word = {}
         self.vocab_size = 0
 
+        nltk.download('punkt')
+
     @staticmethod
     def tokenize_sentence(sentence):
         tokens = [token.lower() for token in word_tokenize(sentence)]
@@ -57,7 +59,7 @@ class WordLevelTokenizer:
         unique_tokens = [token for token, freq in token_frequency.items() if freq >= self.min_frequency]
 
         # Populate word2index dictionary
-        self.word2index = {word: idx + len(self.special_tokens) for idx, word in enumerate(unique_tokens)}
+        self.word2index = {word: idx + len(self.special_tokens) for idx, word in enumerate(sorted(unique_tokens))}
 
         # Add the special tokens
         for token, token_id in zip(self.special_tokens, self.special_tokens_ids):
@@ -102,7 +104,7 @@ class WordLevelTokenizer:
         """
         return ' '.join([self.id_to_token(token_id) for token_id in token_ids])
 
-    def save(self, path):
+    def to_pickle(self, path):
 
         # Get the directory part of the file path
         parent_folder = os.path.dirname(path)
@@ -117,15 +119,111 @@ class WordLevelTokenizer:
                 'index2word': self.index2word
             }, file)
 
-    def restore(self, path):
+    def from_pickle(self, path):
         with open(path, 'rb') as file:
             data = pickle.load(file)
             self.vocab_size = data['vocab_size']
             self.word2index = data['word2index']
             self.index2word = data['index2word']
 
+    def to_txt(self, path):
+
+        # Get the directory part of the file path
+        parent_folder = os.path.dirname(path)
+
+        # Create the parent folders if they don't exist
+        os.makedirs(parent_folder, exist_ok=True)
+
+        with open(path, 'w') as file:
+            file.write(f"vocab_size: {self.vocab_size}\n")
+            for word, index in self.word2index.items():
+                file.write(f"{word}\t{index}\n")
+
+    def from_txt(self, path):
+        with open(path, 'r') as file:
+            lines = file.readlines()
+            vocab_size = int(lines[0].split(':')[1])
+            self.vocab_size = vocab_size
+
+            word2index = {}
+            for line in lines[1:]:
+                word, index = line.strip().split('\t')
+                word2index[word] = int(index)
+            self.word2index = word2index
+
+            index2word = {index: word for word, index in word2index.items()}
+            self.index2word = index2word
+
     @classmethod
-    def load(cls, path):
+    def load(cls, path, driver='pkl'):
+
+        driver = driver.lower()
+
+        if driver not in ['pkl', 'pickle', 'txt']:
+            raise ValueError(f'Invalid driver: {driver}')
+
         tokenizer = WordLevelTokenizer()
-        tokenizer.restore(path)
+
+        if driver == 'pkl' or driver == 'pickle':
+            tokenizer.from_pickle(path)
+        else:
+            tokenizer.from_txt(path)
+
         return tokenizer
+
+
+if __name__ == '__main__':
+
+    # Configure logging level
+    import logging
+    logging.getLogger("lightning.pytorch").setLevel(logging.DEBUG)
+
+    from models.transformer.machine_translation.data import OPUSDataModule
+    import models.transformer.machine_translation.config as config
+
+    def create_tokenizer(stage='source'):  # stage = ['source', 'target']
+
+        # Build a datamodule WITHOUT tokenizers
+        datamodule = OPUSDataModule(
+            config.DATA_DIR,
+            max_seq_len=config.MAX_SEQ_LEN,
+            download=False,
+            random_split=False
+        )
+        datamodule.prepare_data()  # Download the data
+        datamodule.setup()  # Setup it
+
+        # Take the corpus (we need an iterable)
+        train_dataloader = datamodule.train_dataloader()
+        corpus = []
+        for batch in train_dataloader:
+            # batch[f'{stage}_text'] is a list of strings
+            corpus.extend(batch[f'{stage}_text'])
+
+        # Use the corpus to train the tokenizer
+        tokenizer = WordLevelTokenizer()
+        tokenizer.train(corpus)
+
+        return tokenizer
+
+    # Create or get tokenizers
+    source_tokenizer_path = r'tokenizers/tokenizer_source.txt'
+    target_tokenizer_path = r'tokenizers/tokenizer_target.txt'
+
+    # Check if a tokenizer backup exists
+    if os.path.exists(source_tokenizer_path):
+        print(f'Loading source tokenizer...')
+        source_tokenizer = WordLevelTokenizer.load(source_tokenizer_path, driver='txt')
+    # If not, create a monolingual dataset and train them
+    else:
+        print(f'Creating source tokenizer...')
+        source_tokenizer = create_tokenizer('source')
+        source_tokenizer.to_txt(source_tokenizer_path)
+
+    if os.path.exists(target_tokenizer_path):
+        print(f'Loading target tokenizer...')
+        target_tokenizer = WordLevelTokenizer.load(target_tokenizer_path, driver='txt')
+    else:
+        print(f'Creating target tokenizer...')
+        target_tokenizer = create_tokenizer('target')
+        target_tokenizer.to_txt(target_tokenizer_path)

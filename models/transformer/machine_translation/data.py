@@ -120,6 +120,7 @@ class OPUSDataModule(LightningDataModule):
                  source_tokenizer=None,
                  target_tokenizer=None,
                  download=False,
+                 random_split=True,
                  batch_size=config.BATCH_SIZE,
                  num_workers=config.NUM_WORKERS
                  ):
@@ -130,6 +131,7 @@ class OPUSDataModule(LightningDataModule):
         self.target_tokenizer = target_tokenizer
         self.max_seq_len = max_seq_len
         self.download = download
+        self.random_split = random_split
         self.batch_size = batch_size
         self.num_workers = num_workers
 
@@ -192,8 +194,7 @@ class OPUSDataModule(LightningDataModule):
 
         return np.array(data)
 
-    @staticmethod
-    def train_text_val_split(data, train_percent, val_percent):
+    def train_text_val_split(self, data, train_percent, val_percent):
 
         # Calculate the sizes of each set
         num_samples = len(data)
@@ -202,7 +203,9 @@ class OPUSDataModule(LightningDataModule):
 
         # Shuffle the indices to randomly select samples for each set
         indices = np.arange(num_samples)
-        np.random.shuffle(indices)
+
+        if self.random_split:
+            np.random.shuffle(indices)
 
         # Split the indices into training, validation, and test sets
         train_indices = indices[:num_train]

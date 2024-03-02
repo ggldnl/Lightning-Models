@@ -50,7 +50,7 @@ if __name__ == '__main__':
     else:
         print(f'Creating source tokenizer...')
         source_tokenizer = create_tokenizer('source')
-        source_tokenizer.save(source_tokenizer_path)
+        source_tokenizer.to_pickle(source_tokenizer_path)
 
     if os.path.exists(target_tokenizer_path):
         print(f'Loading target tokenizer...')
@@ -58,7 +58,7 @@ if __name__ == '__main__':
     else:
         print(f'Creating target tokenizer...')
         target_tokenizer = create_tokenizer('target')
-        target_tokenizer.save(target_tokenizer_path)
+        target_tokenizer.to_pickle(target_tokenizer_path)
 
     # Create a datamodule with the tokenizers
     datamodule = OPUSDataModule(
