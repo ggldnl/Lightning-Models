@@ -1,3 +1,5 @@
+import torch
+
 from models.feedforward.MNIST_classification.data import CustomMNISTDataModule
 import pytorch_lightning as pl
 from models.feedforward.model import FeedForward
@@ -24,3 +26,16 @@ if __name__ == "__main__":
 
     trainer.fit(model, datamodule)
     trainer.test(model, datamodule)
+
+    # Inference
+    with torch.no_grad():
+        test_dataset = datamodule.test_dataset
+        for i in range(10):
+            print(f'Item [{i}] ', '-' * 100)
+            image = test_dataset[i]['image']
+            label = test_dataset[i]['label']
+            pred = model(image.unsqueeze(0))
+            print(f'Logits     : {pred}')
+            print(f'Prediction : {pred.argmax(dim=1).item()}')
+            print(f'Gold tensor: {label}')
+            print(f'Gold       : {label.argmax(dim=0)}')

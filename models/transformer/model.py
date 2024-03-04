@@ -24,7 +24,9 @@ class Transformer(pl.LightningModule):
                  target_position_encoding,
                  projection,
                  learning_rate,
-                 loss_fn
+                 loss_fn,
+                 source_tokenizer=None,  # Used for basic logging
+                 target_tokenizer=None  # Used for basic logging
                  ):
 
         super(Transformer, self).__init__()
@@ -39,6 +41,9 @@ class Transformer(pl.LightningModule):
         self.learning_rate = learning_rate
         self.loss_fn = loss_fn
 
+        self.source_tokenizer = source_tokenizer
+        self.target_tokenizer = target_tokenizer
+
     def encode(self, source, source_mask):
         source = self.source_embedding(source)
         source = self.source_position_encoding(source)
@@ -52,12 +57,85 @@ class Transformer(pl.LightningModule):
     def project(self, x):
         return self.projection(x)
 
-    def translate(self, input_sequence, max_output_length=50, target_sos_token_id=0, target_eos_token_id=1):
+    def translate(self,
+                  input_text,
+                  source_tokenizer,
+                  target_tokenizer,
+                  max_output_length=20,
+                  ):
         """
         Input sequence contain token ids
         """
 
+        source_sos_token_id = source_tokenizer.sos_token_id
+        source_eos_token_id = source_tokenizer.eos_token_id
+        source_pad_token_id = source_tokenizer.pad_token_id
+
+        target_sos_token_id = target_tokenizer.sos_token_id
+        target_eos_token_id = target_tokenizer.eos_token_id
+
+        # Translate the sequence
+        self.eval()
         with torch.no_grad():
+
+            input_sequence = source_tokenizer.encode(input_text)
+            enc_padding_tokens = max_output_length - len(input_sequence) - 2
+
+            encoder_input = torch.cat(
+                [
+                    torch.tensor([source_sos_token_id], dtype=torch.int32),
+                    torch.tensor(input_sequence, dtype=torch.int32),
+                    torch.tensor([source_eos_token_id], dtype=torch.int32),
+                    torch.tensor([source_pad_token_id] * enc_padding_tokens, dtype=torch.int32)
+                ]
+            ).unsqueeze(0)
+            encoder_mask = (encoder_input != source_pad_token_id).unsqueeze(1).unsqueeze(1).int()
+            encoder_output = self.encode(encoder_input, encoder_mask)
+
+            # Initialize the decoder input with the sos token
+            decoder_input = torch.tensor([[target_sos_token_id]])
+
+            # Generate the translation word by word
+            while decoder_input.size(1) < max_output_length:
+
+                # Build a mask for target and compute the output
+                decoder_mask = torch.ones_like(decoder_input, dtype=torch.float).unsqueeze(1).unsqueeze(2)
+                out = self.decode(encoder_output, encoder_mask, decoder_input, decoder_mask)
+
+                # Project the decoder output to get probabilities over the target vocabulary
+                prob = self.project(out[:, -1])
+                _, predicted_token = torch.max(prob, dim=1)
+                predicted_token_id = predicted_token.item()
+
+                decoder_input = torch.cat(
+                    [
+                        decoder_input,
+                        predicted_token.unsqueeze(0)
+                    ], dim=1
+                )
+
+                print(f"{target_tokenizer.id_to_token(predicted_token_id)} ", end=' ')
+
+                # Break if we predict the end of sentence token
+                if predicted_token_id == target_eos_token_id:
+                    break
+
+        # return target_tokenizer.decode(decoder_input.tolist()[0][1:])
+        return decoder_input.tolist()[0][1:]
+
+    """
+    def translate(self, input_text, source_tokenizer, target_tokenizer, max_output_length=50):
+
+        source_sos_token_id = source_tokenizer.sos_token_id
+        source_eos_token_id = source_tokenizer.eos_token_id
+        source_pad_token_id = source_tokenizer.pad_token_id
+
+        target_sos_token_id = target_tokenizer.sos_token_id
+        target_eos_token_id = target_tokenizer.eos_token_id
+
+        with torch.no_grad():
+
+            input_sequence = source_tokenizer.encode(input_text)
 
             # Encode the input sequence and input mask to get encoder output
             encoder_input = torch.tensor([input_sequence])
@@ -99,6 +177,7 @@ class Transformer(pl.LightningModule):
 
             # Return the generated tokens excluding the SOS token
             return generated_tokens[:1]
+    """
 
     def common_step(self, batch, batch_idx):
 
@@ -110,7 +189,8 @@ class Transformer(pl.LightningModule):
 
         # Run the input through the model
         encoder_output = self.encode(encoder_input, encoder_mask)  # (batch, seq_len, embedding_size)
-        decoder_output = self.decode(encoder_output, encoder_mask, decoder_input, decoder_mask)  # (batch, seq_len, embedding_size)
+        decoder_output = self.decode(encoder_output, encoder_mask, decoder_input,
+                                     decoder_mask)  # (batch, seq_len, embedding_size)
         projection_output = self.project(decoder_output)  # (batch, seq_len, target_vocab_size)
 
         # Compare to the label and compute loss
@@ -157,6 +237,8 @@ class Transformer(pl.LightningModule):
               dropout: float = 0.1,
               heads: int = 8,
               d_ff: int = 2048,
+              source_tokenizer=None,
+              target_tokenizer=None
               ):
 
         # Create embedding layers
@@ -207,7 +289,9 @@ class Transformer(pl.LightningModule):
             target_position_encoding,
             projection_layer,
             learning_rate,
-            loss_fn
+            loss_fn,
+            source_tokenizer=source_tokenizer,
+            target_tokenizer=target_tokenizer
         )
 
         # Initialize the model parameters to train faster (otherwise they are initialized with

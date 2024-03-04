@@ -13,7 +13,8 @@ def create_tokenizers():
     datamodule = OPUSDataModule(
         config.DATA_DIR,
         max_seq_len=config.MAX_SEQ_LEN,
-        download=False
+        download=False,
+        random_split=False
     )
     datamodule.prepare_data()  # Download the data
     datamodule.setup()  # Setup it
@@ -56,7 +57,7 @@ if __name__ == '__main__':
     print(f'Target tokenizer vocabulary size: {target_tokenizer.vocab_size}')
 
     # Create the model or restore it from a checkpoint
-    checkpoint_path = '/home/daniel/Git/Lightning-Models/models/transformer/machine_translation/lightning_logs/version_41/'
+    checkpoint_path = '/home/daniel/Git/Lightning-Models/models/transformer/machine_translation/lightning_logs/version_50/checkpoints/epoch=9-step=14020.ckpt'
     if os.path.exists(checkpoint_path):
         print(f'Loading checkpoint...')
         model = Transformer.load_from_checkpoint(checkpoint_path)
@@ -77,17 +78,16 @@ if __name__ == '__main__':
             loss_fn=nn.CrossEntropyLoss(ignore_index=source_tokenizer.pad_token_id, label_smoothing=0.1)
         )
 
-    input_text = 'Hello, I\'m a transformer.'
-    tokenized_input = source_tokenizer.encode(input_text)
+    input_text = 'I\'m a good boy.'
 
     print(f'Input sentence : {input_text}')
-    print(f'Tokenized input: {tokenized_input}')
+    print(f'Tokenized input: {source_tokenizer.encode(input_text)}')
 
     model_output = model.translate(
-        tokenized_input,
+        input_text,
+        source_tokenizer,
+        target_tokenizer,
         max_output_length=20,
-        target_sos_token_id=target_tokenizer.sos_token_id,
-        target_eos_token_id=target_tokenizer.eos_token_id
     )
     decoded_output = target_tokenizer.decode(model_output)
 

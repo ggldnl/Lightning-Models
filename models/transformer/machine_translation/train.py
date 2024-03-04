@@ -82,7 +82,9 @@ if __name__ == '__main__':
         dropout=config.DROPOUT,
         heads=config.HEADS,
         d_ff=config.D_FF,
-        loss_fn=nn.CrossEntropyLoss(ignore_index=source_tokenizer.pad_token_id, label_smoothing=0.1)
+        loss_fn=nn.CrossEntropyLoss(ignore_index=source_tokenizer.pad_token_id, label_smoothing=0.1),
+        source_tokenizer=source_tokenizer,
+        target_tokenizer=target_tokenizer
     )
 
     # Create the trainer
