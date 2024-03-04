@@ -79,7 +79,7 @@ class Transformer(pl.LightningModule):
         with torch.no_grad():
 
             input_sequence = source_tokenizer.encode(input_text)
-            enc_padding_tokens = max_output_length - len(input_sequence) - 2
+            enc_padding_tokens = self.source_position_encoding.seq_len - len(input_sequence) - 2
 
             encoder_input = torch.cat(
                 [
@@ -88,8 +88,8 @@ class Transformer(pl.LightningModule):
                     torch.tensor([source_eos_token_id], dtype=torch.int32),
                     torch.tensor([source_pad_token_id] * enc_padding_tokens, dtype=torch.int32)
                 ]
-            ).unsqueeze(0)
-            encoder_mask = (encoder_input != source_pad_token_id).unsqueeze(1).unsqueeze(1).int()
+            )
+            encoder_mask = (encoder_input != source_pad_token_id).unsqueeze(0).unsqueeze(0).int()
             encoder_output = self.encode(encoder_input, encoder_mask)
 
             # Initialize the decoder input with the sos token
@@ -99,7 +99,7 @@ class Transformer(pl.LightningModule):
             while decoder_input.size(1) < max_output_length:
 
                 # Build a mask for target and compute the output
-                decoder_mask = torch.ones_like(decoder_input, dtype=torch.float).unsqueeze(1).unsqueeze(2)
+                decoder_mask = torch.triu(torch.ones((1, decoder_input.size(1), decoder_input.size(1))), diagonal=1).type(torch.int32)
                 out = self.decode(encoder_output, encoder_mask, decoder_input, decoder_mask)
 
                 # Project the decoder output to get probabilities over the target vocabulary

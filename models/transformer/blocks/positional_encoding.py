@@ -69,5 +69,5 @@ class PositionalEncoding(pl.LightningModule):
         self.register_buffer('pe', position_embedding)
 
     def forward(self, x):
-        x = x + (self.pe[:, :x.shape[1], :]).requires_grad_(False)
+        x = x + (self.pe[:, :x.shape[0], :]).requires_grad_(False)
         return self.dropout(x)
