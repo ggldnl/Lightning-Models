@@ -7,7 +7,8 @@ import torch.nn as nn
 import config
 
 
-def create_tokenizers():
+"""
+def create_tokenizers(source_tokenizer_path=None, target_tokenizer_path=None):
 
     # Build a datamodule WITHOUT tokenizers
     datamodule = OPUSDataModule(
@@ -35,11 +36,18 @@ def create_tokenizers():
     # Use the corpus to train the tokenizers
     source_tokenizer = WordLevelTokenizer()
     source_tokenizer.train(source_corpus)
+    if source_tokenizer_path is not None:
+        ext = source_tokenizer_path.split('.')[-1]
+        source_tokenizer.store(source_tokenizer_path, driver=ext)
 
     target_tokenizer = WordLevelTokenizer()
     target_tokenizer.train(target_corpus)
+    if target_tokenizer_path is not None:
+        ext = target_tokenizer_path.split('.')[-1]
+        target_tokenizer.store(target_tokenizer_path, driver=ext)
 
     return source_tokenizer, target_tokenizer
+"""
 
 
 if __name__ == '__main__':
@@ -48,35 +56,44 @@ if __name__ == '__main__':
     import logging
     logging.getLogger("lightning.pytorch").setLevel(logging.DEBUG)
 
+    """
     # Create tokenizers
     print(f'Creating source and target tokenizers...')
     source_tokenizer, target_tokenizer = create_tokenizers()
+    """
+
+    # Load the tokenizers
+    source_tokenizer_path = r'tokenizers/tokenizer_source.pkl'
+    target_tokenizer_path = r'tokenizers/tokenizer_target.pkl'
+    source_tokenizer = WordLevelTokenizer()
+    target_tokenizer = WordLevelTokenizer()
 
     print(f'Source and target tokenizers created.')
     print(f'Source tokenizer vocabulary size: {source_tokenizer.vocab_size}')
     print(f'Target tokenizer vocabulary size: {target_tokenizer.vocab_size}')
 
-    # Create the model or restore it from a checkpoint
+    # Create the model
+    model = Transformer.build(
+        source_vocab_size=source_tokenizer.vocab_size,
+        target_vocab_size=target_tokenizer.vocab_size,
+        source_sequence_length=config.MAX_SEQ_LEN,
+        target_sequence_length=config.MAX_SEQ_LEN,
+        learning_rate=config.LEARNING_RATE,
+        embedding_size=config.EMBED_DIM,
+        num_encoders=config.NUM_ENCODERS,
+        num_decoders=config.NUM_DECODERS,
+        dropout=config.DROPOUT,
+        heads=config.HEADS,
+        d_ff=config.D_FF,
+        loss_fn=nn.CrossEntropyLoss(ignore_index=source_tokenizer.pad_token_id, label_smoothing=0.1)
+    )
+
+    # Restore a checkpoint
     checkpoint_path = '/home/daniel/Git/Lightning-Models/models/transformer/machine_translation/lightning_logs/version_50/checkpoints/epoch=9-step=14020.ckpt'
     if os.path.exists(checkpoint_path):
         print(f'Loading checkpoint...')
-        model = Transformer.load_from_checkpoint(checkpoint_path)
+        model.load_from_checkpoint(checkpoint_path)
         print(f'Checkpoint successfully loaded')
-    else:
-        model = Transformer.build(
-            source_vocab_size=source_tokenizer.vocab_size,
-            target_vocab_size=target_tokenizer.vocab_size,
-            source_sequence_length=config.MAX_SEQ_LEN,
-            target_sequence_length=config.MAX_SEQ_LEN,
-            learning_rate=config.LEARNING_RATE,
-            embedding_size=config.EMBED_DIM,
-            num_encoders=config.NUM_ENCODERS,
-            num_decoders=config.NUM_DECODERS,
-            dropout=config.DROPOUT,
-            heads=config.HEADS,
-            d_ff=config.D_FF,
-            loss_fn=nn.CrossEntropyLoss(ignore_index=source_tokenizer.pad_token_id, label_smoothing=0.1)
-        )
 
     input_text = 'I\'m a good boy.'
 

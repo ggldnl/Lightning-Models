@@ -1,5 +1,4 @@
 from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
 import pickle
 import nltk
 import os
@@ -153,6 +152,18 @@ class WordLevelTokenizer:
 
             index2word = {index: word for word, index in word2index.items()}
             self.index2word = index2word
+
+    def store(self, path, driver='plk'):
+
+        driver = driver.lower()
+
+        if driver not in ['pkl', 'pickle', 'txt']:
+            raise ValueError(f'Invalid driver: {driver}')
+
+        if driver == 'plk' or driver == 'pickle':
+            self.to_pickle(path)
+        else:
+            self.to_txt(path)
 
     @classmethod
     def load(cls, path, driver='pkl'):

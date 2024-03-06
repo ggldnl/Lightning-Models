@@ -39,8 +39,8 @@ if __name__ == '__main__':
     logging.getLogger("lightning.pytorch").setLevel(logging.DEBUG)
 
     # Create or get tokenizers
-    source_tokenizer_path = r'tokenizers/tokenizer_source.json'
-    target_tokenizer_path = r'tokenizers/tokenizer_target.json'
+    source_tokenizer_path = r'tokenizers/tokenizer_source.pkl'
+    target_tokenizer_path = r'tokenizers/tokenizer_target.pkl'
 
     # Check if a tokenizer backup exists
     if os.path.exists(source_tokenizer_path):

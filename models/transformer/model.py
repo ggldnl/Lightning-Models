@@ -81,6 +81,7 @@ class Transformer(pl.LightningModule):
             input_sequence = source_tokenizer.encode(input_text)
             enc_padding_tokens = self.source_position_encoding.seq_len - len(input_sequence) - 2
 
+            # Unsqueeze adds the batch dimension
             encoder_input = torch.cat(
                 [
                     torch.tensor([source_sos_token_id], dtype=torch.int32),
