@@ -62,6 +62,7 @@ class Transformer(pl.LightningModule):
                   source_tokenizer,
                   target_tokenizer,
                   max_output_length=20,
+                  verbose=True,
                   ):
         """
         Input sequence contain token ids
@@ -89,8 +90,8 @@ class Transformer(pl.LightningModule):
                     torch.tensor([source_eos_token_id], dtype=torch.int32),
                     torch.tensor([source_pad_token_id] * enc_padding_tokens, dtype=torch.int32)
                 ]
-            ).unsqueeze(0)
-            encoder_mask = (encoder_input != source_pad_token_id).unsqueeze(0).unsqueeze(0).int()
+            ).unsqueeze(0)  # (1, seq_len)
+            encoder_mask = (encoder_input != source_pad_token_id).unsqueeze(0).unsqueeze(0).int()  # (1, 1, 1, seq_len)
             encoder_output = self.encode(encoder_input, encoder_mask)
 
             # Initialize the decoder input with the sos token
@@ -101,84 +102,39 @@ class Transformer(pl.LightningModule):
 
                 # Build a mask for target and compute the output
                 decoder_mask = torch.triu(torch.ones((1, decoder_input.size(1), decoder_input.size(1))), diagonal=1).type(torch.int32)
-                out = self.decode(encoder_output, encoder_mask, decoder_input, decoder_mask)
+                decoder_output = self.decode(encoder_output, encoder_mask, decoder_input, decoder_mask)
 
                 # Project the decoder output to get probabilities over the target vocabulary
-                prob = self.project(out[:, -1])
+                projection_output = self.project(decoder_output)
+                predicted_token = torch.argmax(projection_output[:, -1, :])
+                predicted_token_id = predicted_token.item()
+
+                """
+                # Project the decoder output to get probabilities over the target vocabulary
+                prob = self.project(decoder_output[:, -1])
                 _, predicted_token = torch.max(prob, dim=1)
                 predicted_token_id = predicted_token.item()
+                """
 
                 decoder_input = torch.cat(
                     [
                         decoder_input,
-                        predicted_token.unsqueeze(0)
+                        predicted_token.unsqueeze(0).unsqueeze(0)
                     ], dim=1
                 )
 
-                print(f"{target_tokenizer.id_to_token(predicted_token_id)} ", end=' ')
+                if verbose:
+                    print(f"{target_tokenizer.id_to_token(predicted_token_id)} ", end=' ')
 
                 # Break if we predict the end of sentence token
                 if predicted_token_id == target_eos_token_id:
                     break
 
+        if verbose:
+            print()
+
         # return target_tokenizer.decode(decoder_input.tolist()[0][1:])
         return decoder_input.tolist()[0][1:]
-
-    """
-    def translate(self, input_text, source_tokenizer, target_tokenizer, max_output_length=50):
-
-        source_sos_token_id = source_tokenizer.sos_token_id
-        source_eos_token_id = source_tokenizer.eos_token_id
-        source_pad_token_id = source_tokenizer.pad_token_id
-
-        target_sos_token_id = target_tokenizer.sos_token_id
-        target_eos_token_id = target_tokenizer.eos_token_id
-
-        with torch.no_grad():
-
-            input_sequence = source_tokenizer.encode(input_text)
-
-            # Encode the input sequence and input mask to get encoder output
-            encoder_input = torch.tensor([input_sequence])
-            encoder_mask = torch.ones_like(encoder_input).unsqueeze(1).unsqueeze(1)
-            encoder_output = self.encode(encoder_input, encoder_mask)
-
-            # Initialize decoder input with SOS token and the decoder mask
-            decoder_input = torch.tensor([[target_sos_token_id]])
-            decoder_mask = torch.ones_like(decoder_input).unsqueeze(1).unsqueeze(2)
-
-            generated_tokens = []
-
-            for _ in range(max_output_length):
-
-                # Decode one step at a time
-                decoder_output = self.decode(encoder_output, encoder_mask, decoder_input, decoder_mask)
-
-                # Project the decoder output to get probabilities over the target vocabulary
-                projection_output = self.project(decoder_output)
-
-                # Get the token with the maximum probability
-                predicted_token_id = projection_output[0][0].argmax().item()
-
-                # Break if EOS token is predicted or max length is reached
-                if predicted_token_id == target_eos_token_id or len(generated_tokens) >= max_output_length:
-                    break
-
-                # Append the predicted token to the generated sequence
-                generated_tokens.append(predicted_token_id)
-
-                # print(f'Predicted token: {predicted_token_id}')
-
-                # Append the generated token to the decoder input for the next step
-                predicted_token = torch.tensor([[predicted_token_id]])
-                decoder_input = torch.cat([decoder_input, predicted_token])
-
-                # Update the attention mask for the decoder
-                decoder_mask = torch.ones_like(decoder_input).unsqueeze(1).unsqueeze(2)
-
-            # Return the generated tokens excluding the SOS token
-            return generated_tokens[:1]
-    """
 
     def common_step(self, batch, batch_idx):
 
@@ -195,8 +151,8 @@ class Transformer(pl.LightningModule):
         projection_output = self.project(decoder_output)  # (batch, seq_len, target_vocab_size)
 
         # Compare to the label and compute loss
-        projection_output = projection_output.view(-1, self.target_embedding.vocab_size)
-        label = label.view(-1).long()
+        projection_output = projection_output.view(-1, self.target_embedding.vocab_size)  # (5600, 17712)
+        label = label.view(-1).long()  # (5600)
         loss = self.loss_fn(projection_output, label)
         accuracy = 0
 

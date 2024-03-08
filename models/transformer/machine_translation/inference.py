@@ -65,8 +65,8 @@ if __name__ == '__main__':
     # Load the tokenizers
     source_tokenizer_path = r'tokenizers/tokenizer_source.pkl'
     target_tokenizer_path = r'tokenizers/tokenizer_target.pkl'
-    source_tokenizer = WordLevelTokenizer()
-    target_tokenizer = WordLevelTokenizer()
+    source_tokenizer = WordLevelTokenizer.load(source_tokenizer_path, driver='pkl')
+    target_tokenizer = WordLevelTokenizer.load(target_tokenizer_path, driver='pkl')
 
     print(f'Source and target tokenizers created.')
     print(f'Source tokenizer vocabulary size: {source_tokenizer.vocab_size}')

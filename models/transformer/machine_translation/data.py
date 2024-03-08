@@ -98,17 +98,24 @@ class OPUSDataset(Dataset):
 
         return {
             "encoder_input": encoder_input,  # (sequence_len)
-            "decoder_input": decoder_input,
+            "decoder_input": decoder_input,  # (sequence_len)
             "encoder_mask": (encoder_input != self.source_pad_token).unsqueeze(0).unsqueeze(0).int(),
             # (1, 1, sequence_len)
 
             # Words can only look at words coming before them
             # (1, sequence_len) & (1, sequence_len, sequence_len) (broadcasting)
+            # -> (1, sequence_len, sequence_len)
             "decoder_mask": (decoder_input != self.target_pad_token).unsqueeze(0).unsqueeze(0).int() &
                             causal_mask(decoder_input.size(0)),
             "label": label,
             "source_text": source_sentence,
             "target_text": target_sentence
+
+            # All the tensors will be batched:
+            # encoder_input in batch: (batch, sequence_len)
+            # decoder_input in batch: (batch, sequence_len)
+            # encoder_mask in batch : (batch, 1, 1, sequence_len)
+            # decoder_mask in batch : (batch, 1, sequence_len, sequence_len)
         }
 
 
