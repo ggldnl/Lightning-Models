@@ -90,8 +90,8 @@ class Transformer(pl.LightningModule):
                     torch.tensor([source_eos_token_id], dtype=torch.int32),
                     torch.tensor([source_pad_token_id] * enc_padding_tokens, dtype=torch.int32)
                 ]
-            ).unsqueeze(0)  # (1, seq_len)
-            encoder_mask = (encoder_input != source_pad_token_id).unsqueeze(0).unsqueeze(0).int()  # (1, 1, 1, seq_len)
+            )  # (seq_len)
+            encoder_mask = (encoder_input != source_pad_token_id).unsqueeze(0).unsqueeze(0).int()  # (1, 1, seq_len)
             encoder_output = self.encode(encoder_input, encoder_mask)
 
             # Initialize the decoder input with the sos token

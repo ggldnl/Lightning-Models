@@ -4,9 +4,9 @@ NUM_ENCODERS = 2  # Number of encoder blocks
 NUM_DECODERS = 6  # Number of decoder blocks
 DROPOUT = 0.1
 HEADS = 4
-D_FF = 80
+D_FF = 200
 
-BATCH_SIZE = 16
+BATCH_SIZE = 8
 NUM_EPOCHS = 20
 NUM_WORKERS = 4
 LEARNING_RATE = 2e-4

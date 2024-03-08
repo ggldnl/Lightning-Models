@@ -87,10 +87,25 @@ if __name__ == '__main__':
         target_tokenizer=target_tokenizer
     )
 
+
+    class TranslationCallback(pl.Callback):
+        def __init__(self, model, sentence_to_translate):
+            super().__init__()
+            self.model = model
+            self.sentence_to_translate = sentence_to_translate
+
+        def on_epoch_end(self, trainer, pl_module):
+            translated_sentence = self.model.translate(self.sentence_to_translate)
+            print(f"Epoch {trainer.current_epoch + 1} - Translated Sentence: {translated_sentence}")
+
+
+    sentence_to_translate = "Hello, how are you?"
+    translation_callback = TranslationCallback(model, sentence_to_translate)
+
     # Create the trainer
     trainer = pl.Trainer(
         min_epochs=1, max_epochs=config.NUM_EPOCHS,
-        # precision=config.PRECISION,
+        callbacks=[translation_callback],
         accelerator='auto'
     )
 

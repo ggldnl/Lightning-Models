@@ -69,6 +69,9 @@ class PositionalEncoding(pl.LightningModule):
         self.register_buffer('pe', position_embedding)
 
     def forward(self, x):
-        # We take the dimension 1 since we need to sum the positional encoding to the token dimension
-        x = x + (self.pe[:, :x.shape[1], :]).requires_grad_(False)
+        if len(x.shape) > 2:  # We are training, we have a batch dimension
+            # We take the dimension 1 since we need to sum the positional encoding to the token dimension
+            x = x + (self.pe[:, :x.shape[1], :]).requires_grad_(False)  # (batch, seq_len, d_model)
+        else:  # We are making inference, we don't have a batch dimension
+            x = x + (self.pe[:, :]).requires_grad_(False)
         return self.dropout(x)
