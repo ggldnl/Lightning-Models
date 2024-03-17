@@ -1,254 +1,177 @@
-import pytorch_lightning as pl
-import torch
-
-from models.transformer.blocks.encoder import Encoder
-from models.transformer.blocks.decoder import Decoder
+from models.transformer.blocks.multihead_attention import MultiHeadAttentionBlock
+from models.transformer.blocks.positional_encoding import PositionalEncoding
+from models.transformer.blocks.input_embeddings import InputEmbeddings
+from models.transformer.blocks.feed_forward import FeedForwardBlock
+from models.transformer.blocks.projection import ProjectionLayer
 from models.transformer.blocks.encoder_block import EncoderBlock
 from models.transformer.blocks.decoder_block import DecoderBlock
-from models.transformer.blocks.input_embedding import InputEmbeddings
-from models.transformer.blocks.positional_encoding import PositionalEncoding
-from models.transformer.blocks.multihead_attention import MultiHeadAttention
-from models.transformer.blocks.feedforward import FeedForward
-from models.transformer.blocks.projection import Projection
-from torch import nn, optim
+from models.transformer.blocks.encoder import Encoder
+from models.transformer.blocks.decoder import Decoder
+import pytorch_lightning as pl
+import torch.nn as nn
+import torch
 
 
-class Transformer(pl.LightningModule):
+class Transformer(nn.Module):
 
     def __init__(self,
-                 encoder,
-                 decoder,
-                 source_embedding,  # Input embedding for the input sequence (language 1)
-                 target_embedding,  # Output embedding for the output sequence (language 2)
-                 source_position_encoding,
-                 target_position_encoding,
-                 projection,
-                 learning_rate,
-                 loss_fn,
-                 source_tokenizer=None,  # Used for basic logging
-                 target_tokenizer=None  # Used for basic logging
-                 ):
+                 encoder: Encoder,
+                 decoder: Decoder,
+                 source_embedding: InputEmbeddings,
+                 target_embedding: InputEmbeddings,
+                 source_position_encoding: PositionalEncoding,
+                 target_position_encoding: PositionalEncoding,
+                 projection_layer: ProjectionLayer
+                 ) -> None:
 
-        super(Transformer, self).__init__()
+        super().__init__()
 
         self.encoder = encoder
         self.decoder = decoder
-        self.source_embedding = source_embedding
-        self.target_embedding = target_embedding
+        self.source_embedding = source_embedding  # Input embedding for the input sequence (language 1)
+        self.target_embedding = target_embedding  # Output embedding for the output sequence (language 2)
         self.source_position_encoding = source_position_encoding
         self.target_position_encoding = target_position_encoding
-        self.projection = projection
-        self.learning_rate = learning_rate
-        self.loss_fn = loss_fn
-
-        self.source_tokenizer = source_tokenizer
-        self.target_tokenizer = target_tokenizer
+        self.projection_layer = projection_layer
 
     def encode(self, source, source_mask):
+
+        # Apply source embeddings to the input source language
         source = self.source_embedding(source)
+
+        # Apply source positional encoding to the source embeddings
         source = self.source_position_encoding(source)
+
+        # Return the source embeddings plus a source mask to prevent attention to certain elements
         return self.encoder(source, source_mask)
 
-    def decode(self, source, source_mask, target, target_mask):
+    def decode(self, encoder_output, source_mask, target, target_mask):
+
+        # Apply target embeddings to the input target language
         target = self.target_embedding(target)
+
+        # Apply target positional encoding to the target embeddings
         target = self.target_position_encoding(target)
-        return self.decoder(target, source, source_mask, target_mask)
+
+        # The target mask ensures that the model won't see future elements of the sequence
+        return self.decoder(target, encoder_output, source_mask, target_mask)
 
     def project(self, x):
-        return self.projection(x)
+        return self.projection_layer(x)
 
-    def translate(self,
-                  input_text,
-                  source_tokenizer,
-                  target_tokenizer,
-                  max_output_length=20,
-                  verbose=True,
-                  ):
-        """
-        Input sequence contain token ids
-        """
+    def forward(self, encoder_input, encoder_mask, decoder_input, decoder_mask):
+        encoder_output = self.encode(encoder_input, encoder_mask)
+        decoder_output = self.decode(encoder_output, encoder_mask, decoder_input, decoder_mask)
+        proj_output = self.project(decoder_output)
+        return proj_output
 
-        source_sos_token_id = source_tokenizer.sos_token_id
-        source_eos_token_id = source_tokenizer.eos_token_id
-        source_pad_token_id = source_tokenizer.pad_token_id
+    def translate(self, input_sequence, source_tokenizer, target_tokenizer, max_output_len, verbose=True):
 
-        target_sos_token_id = target_tokenizer.sos_token_id
-        target_eos_token_id = target_tokenizer.eos_token_id
+        # Build the encoder input
+        encoder_input = source_tokenizer.get_encoder_input(input_sequence)
+        encoder_input = encoder_input.unsqueeze(0)  # Add the batch dimension
+        source_mask = source_tokenizer.get_encoder_mask(encoder_input)
 
-        # Translate the sequence
-        self.eval()
-        with torch.no_grad():
+        # Compute the output of the encoder for the source sequence
+        encoder_output = self.encode(encoder_input, source_mask)
 
-            input_sequence = source_tokenizer.encode(input_text)
-            enc_padding_tokens = self.source_position_encoding.seq_len - len(input_sequence) - 2
+        # Initialize the decoder input with the SOS token
+        decoder_input = torch.empty(1, 1).fill_(target_tokenizer.sos_token_id).type(torch.int64)
 
-            # Unsqueeze adds the batch dimension
-            encoder_input = torch.cat(
-                [
-                    torch.tensor([source_sos_token_id], dtype=torch.int32),
-                    torch.tensor(input_sequence, dtype=torch.int32),
-                    torch.tensor([source_eos_token_id], dtype=torch.int32),
-                    torch.tensor([source_pad_token_id] * enc_padding_tokens, dtype=torch.int32)
-                ]
-            )  # (seq_len)
-            encoder_mask = (encoder_input != source_pad_token_id).unsqueeze(0).unsqueeze(0).int()  # (1, 1, seq_len)
-            encoder_output = self.encode(encoder_input, encoder_mask)
+        while True:
 
-            # Initialize the decoder input with the sos token
-            decoder_input = torch.tensor([[target_sos_token_id]])
+            # If the output sequence length is past the max output length, break the loop
+            if decoder_input.size(1) == max_output_len:
+                break
 
-            # Generate the translation word by word
-            while decoder_input.size(1) < max_output_length:
+            # Build a mask for the decoder input
+            decoder_mask = target_tokenizer.get_decoder_mask(decoder_input)
 
-                # Build a mask for target and compute the output
-                decoder_mask = torch.triu(torch.ones((1, decoder_input.size(1), decoder_input.size(1))), diagonal=1).type(torch.int32)
-                decoder_output = self.decode(encoder_output, encoder_mask, decoder_input, decoder_mask)
+            # Compute the output of the decoder
+            out = self.decode(encoder_output, source_mask, decoder_input, decoder_mask)
 
-                # Project the decoder output to get probabilities over the target vocabulary
-                projection_output = self.project(decoder_output)
-                predicted_token = torch.argmax(projection_output[:, -1, :])
-                predicted_token_id = predicted_token.item()
+            # Apply the projection layer to get the probabilities for the next token
+            prob = self.project(out[:, -1])
 
-                """
-                # Project the decoder output to get probabilities over the target vocabulary
-                prob = self.project(decoder_output[:, -1])
-                _, predicted_token = torch.max(prob, dim=1)
-                predicted_token_id = predicted_token.item()
-                """
+            # Select token with the highest probability
+            _, predicted_token_tensor = torch.max(prob, dim=1)
+            predicted_token_id = predicted_token_tensor.item()
+            decoder_input = torch.cat(
+                [decoder_input, torch.empty(1, 1).fill_(predicted_token_id).type(torch.int64)], dim=1)
 
-                decoder_input = torch.cat(
-                    [
-                        decoder_input,
-                        predicted_token.unsqueeze(0).unsqueeze(0)
-                    ], dim=1
-                )
+            if verbose:
+                print(f'{predicted_token_id} ', end='')
 
-                if verbose:
-                    print(f"{target_tokenizer.id_to_token(predicted_token_id)} ", end=' ')
-
-                # Break if we predict the end of sentence token
-                if predicted_token_id == target_eos_token_id:
-                    break
+            # If the next token is an EOS token, break the loop
+            if predicted_token_id == target_tokenizer.eos_token_id:
+                break
 
         if verbose:
             print()
 
-        # return target_tokenizer.decode(decoder_input.tolist()[0][1:])
-        return decoder_input.tolist()[0][1:]
-
-    def common_step(self, batch, batch_idx):
-
-        encoder_input = batch['encoder_input']  # (batch, seq_len)
-        decoder_input = batch['decoder_input']  # (batch, seq_len)
-        encoder_mask = batch['encoder_mask']  # (batch, 1, 1, seq_len)
-        decoder_mask = batch['decoder_mask']  # (batch, 1, seq_len, seq_len)
-        label = batch['label']  # (batch, seq_len)
-
-        # Run the input through the model
-        encoder_output = self.encode(encoder_input, encoder_mask)  # (batch, seq_len, embedding_size)
-        decoder_output = self.decode(encoder_output, encoder_mask, decoder_input,
-                                     decoder_mask)  # (batch, seq_len, embedding_size)
-        projection_output = self.project(decoder_output)  # (batch, seq_len, target_vocab_size)
-
-        # Compare to the label and compute loss
-        projection_output = projection_output.view(-1, self.target_embedding.vocab_size)  # (5600, 17712)
-        label = label.view(-1).long()  # (5600)
-        loss = self.loss_fn(projection_output, label)
-        accuracy = 0
-
-        return loss, accuracy
-
-    def training_step(self, batch, batch_idx):
-
-        loss, accuracy = self.common_step(batch, batch_idx)
-        return loss
-
-    def validation_step(self, batch, batch_idx):
-
-        loss, accuracy = self.common_step(batch, batch_idx)
-        self.log("val_loss", loss, prog_bar=True)
-        self.log("val_acc", accuracy, prog_bar=True)
-        return loss
-
-    def test_step(self, batch, batch_idx):
-
-        loss, accuracy = self.common_step(batch, batch_idx)
-        self.log("test_loss", loss, prog_bar=True)
-        self.log("test_acc", accuracy, prog_bar=True)
-        return loss
-
-    def configure_optimizers(self):
-        return optim.Adam(self.parameters(), lr=self.learning_rate)
+        # Sequence of tokens generated by the decoder excluding the SOS and including the EOS
+        return decoder_input.squeeze(0).tolist()[1:]
 
     @classmethod
     def build(cls,
-              source_vocab_size,
-              target_vocab_size,
-              source_sequence_length,
-              target_sequence_length,
-              learning_rate,
-              loss_fn,
-              embedding_size: int = 512,
-              num_encoders: int = 6,  # Number of encoder blocks
-              num_decoders: int = 6,  # Number of decoder blocks
-              dropout: float = 0.1,
-              heads: int = 8,
-              d_ff: int = 2048,
-              source_tokenizer=None,
-              target_tokenizer=None
+              src_vocab_size: int,
+              tgt_vocab_size: int,
+              src_seq_len: int,
+              tgt_seq_len: int,
+              embed_dim: int,
+              num_encoders: int,
+              num_decoders: int,
+              heads: int,
+              dropout: float,
+              d_ff: int
               ):
+        """
+        Build a transformer module
+        """
 
-        # Create embedding layers
-        source_embedding = InputEmbeddings(embedding_size, source_vocab_size)
-        target_embedding = InputEmbeddings(embedding_size, target_vocab_size)
+        # Create the embedding layers
+        source_embeddings = InputEmbeddings(embed_dim, src_vocab_size)
+        target_embeddings = InputEmbeddings(embed_dim, tgt_vocab_size)
 
-        # Create the positional encoding layers
-        source_position_encoding = PositionalEncoding(embedding_size, source_sequence_length, dropout)
-        target_position_encoding = PositionalEncoding(embedding_size, target_sequence_length, dropout)
+        # Crete positional encoding layers
+        source_position_encoding = PositionalEncoding(embed_dim, src_seq_len, dropout)
+        target_position_encoding = PositionalEncoding(embed_dim, tgt_seq_len, dropout)
 
-        # Create encoder blocks
+        # Create a list of encoder blocks
         encoder_blocks = []
         for _ in range(num_encoders):
-            encoder_self_attention_block = MultiHeadAttention(embedding_size, heads, dropout)
-            feed_forward_block = FeedForward(embedding_size, d_ff, dropout)
+
+            encoder_self_attention_block = MultiHeadAttentionBlock(embed_dim, heads, dropout)
+            feed_forward_block = FeedForwardBlock(embed_dim, d_ff, dropout)
             encoder_block = EncoderBlock(encoder_self_attention_block, feed_forward_block, dropout)
             encoder_blocks.append(encoder_block)
 
-        # Create encoder
-        encoder = Encoder(nn.ModuleList(encoder_blocks))
-
-        # Create decoder blocks
+        # Create a list of decoder blocks
         decoder_blocks = []
         for _ in range(num_decoders):
-            decoder_self_attention_block = MultiHeadAttention(embedding_size, heads, dropout)
-            decoder_cross_attention_block = MultiHeadAttention(embedding_size, heads, dropout)
-            decoder_feed_forward_block = FeedForward(embedding_size, d_ff, dropout)
-            decoder_block = DecoderBlock(
-                decoder_self_attention_block,
-                decoder_cross_attention_block,
-                decoder_feed_forward_block,
-                dropout
-            )
+            decoder_self_attention_block = MultiHeadAttentionBlock(embed_dim, heads, dropout)
+            decoder_cross_attention_block = MultiHeadAttentionBlock(embed_dim, heads, dropout)
+            feed_forward_block = FeedForwardBlock(embed_dim, d_ff, dropout)
+            decoder_block = DecoderBlock(decoder_self_attention_block, decoder_cross_attention_block,
+                                         feed_forward_block, dropout)
             decoder_blocks.append(decoder_block)
 
-        # Create decoder
+        # Create the Encoder and Decoder by using the EncoderBlocks and DecoderBlocks lists
+        encoder = Encoder(nn.ModuleList(encoder_blocks))
         decoder = Decoder(nn.ModuleList(decoder_blocks))
 
         # Create the projection layer
-        projection_layer = Projection(embedding_size, target_vocab_size)
+        projection_layer = ProjectionLayer(embed_dim, tgt_vocab_size)
 
+        # Create the transformer
         transformer = Transformer(
             encoder,
             decoder,
-            source_embedding,
-            target_embedding,
+            source_embeddings,
+            target_embeddings,
             source_position_encoding,
             target_position_encoding,
-            projection_layer,
-            learning_rate,
-            loss_fn,
-            source_tokenizer=source_tokenizer,
-            target_tokenizer=target_tokenizer
+            projection_layer
         )
 
         # Initialize the model parameters to train faster (otherwise they are initialized with
@@ -258,3 +181,51 @@ class Transformer(pl.LightningModule):
                 nn.init.xavier_uniform_(p)
 
         return transformer
+
+
+class LightningTransformer(pl.LightningModule):
+
+    def __init__(self, model, criterion, optimizer, scheduler=None):
+        super(LightningTransformer, self).__init__()
+        self.model = model
+        self.criterion = criterion
+        self.optimizer = optimizer
+        self.scheduler = scheduler
+
+    def translate(self, input_sequence, source_tokenizer, target_tokenizer, max_output_len, verbose=True):
+        return self.model.translate(input_sequence, source_tokenizer, target_tokenizer, max_output_len, verbose)
+
+    def common_step(self, batch, batch_idx):
+
+        encoder_input = batch['encoder_input']  # (batch, seq_len)
+        decoder_input = batch['decoder_input']  # (batch, seq_len)
+        encoder_mask = batch['encoder_mask']    # (batch, 1, 1, seq_len)
+        decoder_mask = batch['decoder_mask']    # (batch, 1, seq_len, seq_len)
+        label = batch['label']                  # (batch, seq_len)
+
+        # Run the input through the model
+        output = self.model(encoder_input, encoder_mask, decoder_input, decoder_mask)
+        loss = self.criterion(output.view(-1, output.size(-1)), label.view(-1))
+        return loss
+
+    def training_step(self, batch, batch_idx):
+        loss = self.common_step(batch, batch_idx)
+        self.log('train_loss', loss, on_epoch=True)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        loss = self.common_step(batch, batch_idx)
+        self.log('val_loss', loss, on_epoch=True)
+        return loss
+
+    def test_step(self, batch, batch_idx):
+        loss = self.common_step(batch, batch_idx)
+        self.log('test_loss', loss, on_epoch=True)
+        return loss
+
+    def configure_optimizers(self):
+        optimizer = self.optimizer
+        if self.scheduler:
+            return {'optimizer': optimizer, 'lr_scheduler': self.scheduler}
+        else:
+            return optimizer

@@ -1,20 +1,28 @@
-import os.path
-
+from models.transformer.blocks.multihead_attention import MultiHeadAttentionBlock
+from models.transformer.blocks.positional_encoding import PositionalEncoding
+from models.transformer.blocks.input_embeddings import InputEmbeddings
+from models.transformer.blocks.feed_forward import FeedForwardBlock
+from models.transformer.blocks.projection import ProjectionLayer
+from models.transformer.blocks.encoder_block import EncoderBlock
+from models.transformer.blocks.decoder_block import DecoderBlock
+from models.transformer.blocks.encoder import Encoder
+from models.transformer.blocks.decoder import Decoder
 from models.transformer.model import Transformer
 from tokenizer import WordLevelTokenizer
 from data import OPUSDataModule
 import torch.nn as nn
 import config
+import torch
+import os
 
 
-"""
-def create_tokenizers(source_tokenizer_path=None, target_tokenizer_path=None):
+def create_tokenizer(stage='source'):  # stage = ['source', 'target']
 
     # Build a datamodule WITHOUT tokenizers
     datamodule = OPUSDataModule(
         config.DATA_DIR,
         max_seq_len=config.MAX_SEQ_LEN,
-        download=False,
+        download='infer',
         random_split=False
     )
     datamodule.prepare_data()  # Download the data
@@ -22,89 +30,133 @@ def create_tokenizers(source_tokenizer_path=None, target_tokenizer_path=None):
 
     # Take the corpus (we need an iterable)
     train_dataloader = datamodule.train_dataloader()
-    source_corpus = []
-    target_corpus = []
+    corpus = []
     for batch in train_dataloader:
-        # batch[f'{stage}_text'] is a list of strings
-        source_corpus.extend(batch['source_text'])
-        target_corpus.extend(batch['target_text'])
+        corpus.extend(batch[f'{stage}_text'])
 
-    # Print a dataset sample
-    for i in range(3):
-        print(f"Sentence pair [{i}]:\n\tsource: {source_corpus[i]}\n\ttarget: {target_corpus[i]}\n")
+    # Use the corpus to train the tokenizer
+    tokenizer = WordLevelTokenizer()
+    tokenizer.train(corpus)
 
-    # Use the corpus to train the tokenizers
-    source_tokenizer = WordLevelTokenizer()
-    source_tokenizer.train(source_corpus)
-    if source_tokenizer_path is not None:
-        ext = source_tokenizer_path.split('.')[-1]
-        source_tokenizer.store(source_tokenizer_path, driver=ext)
+    return tokenizer
 
-    target_tokenizer = WordLevelTokenizer()
-    target_tokenizer.train(target_corpus)
-    if target_tokenizer_path is not None:
-        ext = target_tokenizer_path.split('.')[-1]
-        target_tokenizer.store(target_tokenizer_path, driver=ext)
 
-    return source_tokenizer, target_tokenizer
-"""
+def create_transformer(
+        src_vocab_size: int,
+        tgt_vocab_size: int,
+        src_seq_len: int,
+        tgt_seq_len: int,
+        embed_dim: int = config.EMBED_DIM,
+        num_encoders: int = config.NUM_ENCODERS,
+        num_decoders: int = config.NUM_DECODERS,
+        heads: int = config.HEADS,
+        dropout: float = config.DROPOUT,
+        d_ff: int = config.D_FF
+):
+
+    # creating embedding layers
+    src_embed = InputEmbeddings(embed_dim, src_vocab_size)  # source vocab size to embedding size vectors
+    tgt_embed = InputEmbeddings(embed_dim, tgt_vocab_size)  # target vocab size to embedding size vectors
+
+    # creating positional encoding layers
+    src_pos = PositionalEncoding(embed_dim, src_seq_len, dropout)
+    tgt_pos = PositionalEncoding(embed_dim, tgt_seq_len, dropout)
+
+    # creating EncoderBlocks
+    encoder_blocks = []
+    for _ in range(num_encoders):
+        encoder_self_attention_block = MultiHeadAttentionBlock(embed_dim, heads, dropout)  # self-attention
+        feed_forward_block = FeedForwardBlock(embed_dim, d_ff, dropout)  # feedforward
+
+        # combine layers into an EncoderBlock
+        encoder_block = EncoderBlock(encoder_self_attention_block, feed_forward_block, dropout)
+        encoder_blocks.append(encoder_block)  # appending EncoderBlock to the list of EncoderBlocks
+
+    # creating decoder blocks
+    decoder_blocks = []
+    for _ in range(num_decoders):
+        decoder_self_attention_block = MultiHeadAttentionBlock(embed_dim, heads, dropout)
+        decoder_cross_attention_block = MultiHeadAttentionBlock(embed_dim, heads, dropout)  # cross-attention
+        feed_forward_block = FeedForwardBlock(embed_dim, d_ff, dropout)  # feedforward
+
+        # combining layers into a DecoderBlock
+        decoder_block = DecoderBlock(decoder_self_attention_block, decoder_cross_attention_block,
+                                     feed_forward_block, dropout)
+        decoder_blocks.append(decoder_block)  # appending DecoderBlock and DecoderBlocks lists
+
+    # creating the Encoder and Decoder by using the EncoderBlocks and DecoderBlocks lists
+    encoder = Encoder(nn.ModuleList(encoder_blocks))
+    decoder = Decoder(nn.ModuleList(decoder_blocks))
+
+    # Creating projection layer
+    projection_layer = ProjectionLayer(embed_dim, tgt_vocab_size)
+
+    # crating the transformer by combining everything above
+    transformer = Transformer(encoder, decoder, src_embed, tgt_embed, src_pos, tgt_pos, projection_layer)
+
+    # Initialize the parameters
+    for p in transformer.parameters():
+        if p.dim() > 1:
+            nn.init.xavier_uniform_(p)
+
+    # Assembled and initialized Transformer, Ready to be trained and validated!
+    return transformer
 
 
 if __name__ == '__main__':
 
-    # Configure logging level
-    import logging
-    logging.getLogger("lightning.pytorch").setLevel(logging.DEBUG)
+    # Use txt for better interpretability
+    source_tokenizer_path = os.path.join(config.TOK_DIR, r'tokenizer_source.txt')
+    target_tokenizer_path = os.path.join(config.TOK_DIR, r'tokenizer_target.txt')
 
-    """
-    # Create tokenizers
-    print(f'Creating source and target tokenizers...')
-    source_tokenizer, target_tokenizer = create_tokenizers()
-    """
+    # Check if a tokenizer backup exists
+    if os.path.exists(source_tokenizer_path):
+        print(f'Loading source tokenizer...')
+        source_tokenizer = WordLevelTokenizer.load(source_tokenizer_path, driver='txt')
+    # If not, create a monolingual dataset and train them
+    else:
+        print(f'Creating source tokenizer...')
+        source_tokenizer = create_tokenizer('source')
+        source_tokenizer.to_txt(source_tokenizer_path)
 
-    # Load the tokenizers
-    source_tokenizer_path = r'tokenizers/tokenizer_source.pkl'
-    target_tokenizer_path = r'tokenizers/tokenizer_target.pkl'
-    source_tokenizer = WordLevelTokenizer.load(source_tokenizer_path, driver='pkl')
-    target_tokenizer = WordLevelTokenizer.load(target_tokenizer_path, driver='pkl')
+    if os.path.exists(target_tokenizer_path):
+        print(f'Loading target tokenizer...')
+        target_tokenizer = WordLevelTokenizer.load(target_tokenizer_path, driver='txt')
+    else:
+        print(f'Creating target tokenizer...')
+        target_tokenizer = create_tokenizer('target')
+        target_tokenizer.to_txt(target_tokenizer_path)
 
-    print(f'Source and target tokenizers created.')
     print(f'Source tokenizer vocabulary size: {source_tokenizer.vocab_size}')
     print(f'Target tokenizer vocabulary size: {target_tokenizer.vocab_size}')
+    print(f'-' * 100)
 
-    # Create the model
-    model = Transformer.build(
-        source_vocab_size=source_tokenizer.vocab_size,
-        target_vocab_size=target_tokenizer.vocab_size,
-        source_sequence_length=config.MAX_SEQ_LEN,
-        target_sequence_length=config.MAX_SEQ_LEN,
-        learning_rate=config.LEARNING_RATE,
-        embedding_size=config.EMBED_DIM,
-        num_encoders=config.NUM_ENCODERS,
-        num_decoders=config.NUM_DECODERS,
-        dropout=config.DROPOUT,
-        heads=config.HEADS,
-        d_ff=config.D_FF,
-        loss_fn=nn.CrossEntropyLoss(ignore_index=source_tokenizer.pad_token_id, label_smoothing=0.1)
+    # Initialize the model
+    transformer = create_transformer(
+        source_tokenizer.vocab_size,
+        target_tokenizer.vocab_size,
+        config.MAX_SEQ_LEN,
+        config.MAX_SEQ_LEN
     )
+    print('Model created')
 
-    # Restore a checkpoint
-    checkpoint_path = '/home/daniel/Git/Lightning-Models/models/transformer/machine_translation/lightning_logs/version_50/checkpoints/epoch=9-step=14020.ckpt'
-    if os.path.exists(checkpoint_path):
-        print(f'Loading checkpoint...')
-        model.load_from_checkpoint(checkpoint_path)
-        print(f'Checkpoint successfully loaded')
+    # Optional: restore weights
 
-    input_text = 'I\'m a good boy.'
+    # Use the model to make inference
+    input_text = 'We had been wandering, indeed, in the leafless shrubbery an hour in the morning;'
+    tokenized_input = torch.tensor(source_tokenizer.get_encoder_input(input_text, config.MAX_SEQ_LEN))
+    max_output_len = 30
 
     print(f'Input sentence : {input_text}')
-    print(f'Tokenized input: {source_tokenizer.encode(input_text)}')
+    print(f'Tokenized input: {tokenized_input}')
+    print(f'Max output len : {max_output_len}')
+    print(f'-' * 100)
 
-    model_output = model.translate(
+    model_output = transformer.translate(
         input_text,
         source_tokenizer,
         target_tokenizer,
-        max_output_length=20,
+        max_output_len,
     )
     decoded_output = target_tokenizer.decode(model_output)
 

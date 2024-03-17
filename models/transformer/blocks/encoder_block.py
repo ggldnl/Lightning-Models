@@ -1,10 +1,10 @@
-import pytorch_lightning as pl
+from models.transformer.blocks.multihead_attention import MultiHeadAttentionBlock
+from models.transformer.blocks.residual_connection import ResidualConnection
+from models.transformer.blocks.feed_forward import FeedForwardBlock
 import torch.nn as nn
 
-from models.transformer.blocks.layer_norm import LayerNorm
 
-
-class EncoderBlock(pl.LightningModule):
+class EncoderBlock(nn.Module):
     #                               ^
     #                               |
     #    +---------------------------------------------------+
@@ -46,23 +46,23 @@ class EncoderBlock(pl.LightningModule):
     #                               |
 
     def __init__(self,
-                 self_attention_block,
-                 feed_forward_block,
-                 dropout
-                 ):
+                 self_attention_block: MultiHeadAttentionBlock,
+                 feed_forward_block: FeedForwardBlock,
+                 dropout: float
+                 ) -> None:
 
-        super(EncoderBlock, self).__init__()
+        super().__init__()
 
-        self.self_attention = self_attention_block
-        self.feed_forward = feed_forward_block
-        self.norm_1 = LayerNorm()
-        self.norm_2 = LayerNorm()
-        self.dropout = nn.Dropout(dropout)
+        self.self_attention_block = self_attention_block
+        self.feed_forward_block = feed_forward_block
+        self.residual_connections = nn.ModuleList([
+            ResidualConnection(dropout) for _ in range(2)
+        ])
 
     def forward(self, x, source_mask):
 
         # We might want to use a source_mask on the input of the encoder
-        # to exclude some tokens, such as the <EOS> token and so on...
+        # to exclude some tokens, such as the <PAD> token and so on...
         # We don't want these tokens to interact with other tokens
 
         # Input goes to the Multi-Head Self Attention module. It's the
@@ -71,14 +71,7 @@ class EncoderBlock(pl.LightningModule):
         # In the decoder we have a different situation (Cross Attention)
         # where the query coming from the decoder is watching the keys
         # and the values coming from the encoder
-        attention_out = self.self_attention(x, x, x, source_mask)
 
-        # Output of the Multi-Head Attention goes to Add & Norm.
-        # We sum query for the skip connection
-        attention_out = self.dropout(self.norm_1(x + attention_out))
-
-        feedforward_out = self.feed_forward(attention_out)
-
-        feedforward_out = self.dropout(self.norm_2(feedforward_out + attention_out))
-
-        return feedforward_out
+        x = self.residual_connections[0](x, lambda x: self.self_attention_block(x, x, x, source_mask))
+        x = self.residual_connections[1](x, self.feed_forward_block)
+        return x

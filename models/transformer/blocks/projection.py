@@ -1,23 +1,13 @@
-import pytorch_lightning as pl
 import torch.nn as nn
 import torch
 
 
-class Projection(pl.LightningModule):
-
-    def __init__(self,
-                 d_model,
-                 vocab_size
-                 ):
-        """
-        We expect the output of the decoder to have shape (batch, seq_len, d_model).
-        We want to map this output back to the vocabulary by converting the embedding
-        coming from the decoder to a position on it.
-        """
-
-        super(Projection, self).__init__()
-
-        self.projection = nn.Linear(d_model, vocab_size)
+class ProjectionLayer(nn.Module):
+    def __init__(self, d_model: int, vocab_size: int)-> None: # model dimension and the size of the output vocabulary
+        super().__init__()
+        # linear layer for projecting the feature space of `d_model` to the output space of `vocab_size`
+        self.proj = nn.Linear(d_model, vocab_size)
 
     def forward(self, x):
-        return torch.log_softmax(self.projection(x), dim=-1)
+        # applying the log Softmax function to the output
+        return torch.log_softmax(self.proj(x), dim=-1)

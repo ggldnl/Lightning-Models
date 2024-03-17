@@ -1,6 +1,6 @@
 import pytorch_lightning as pl
 
-from models.transformer.blocks.layer_norm import LayerNorm
+from models.transformer_legacy.blocks.layer_norm import LayerNorm
 
 
 class Encoder(pl.LightningModule):
