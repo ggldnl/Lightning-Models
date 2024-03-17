@@ -107,16 +107,9 @@ class MultiHeadAttentionBlock(nn.Module):
         key = self.w_k(k)  # K' matrix
         value = self.w_v(v)  # V' matrix
 
-        # splitting results into smaller matrices for the different heads
-        # splitting embeddings (third dimension) into h parts
-
         # Transpose => bring the head to the second dimension
         query = query.view(query.shape[0], query.shape[1], self.h, self.d_k).transpose(1, 2)
-
-        # Transpose => bring the head to the second dimension
         key = key.view(key.shape[0], key.shape[1], self.h, self.d_k).transpose(1, 2)
-
-        # Transpose => bring the head to the second dimension
         value = value.view(value.shape[0], value.shape[1], self.h, self.d_k).transpose(1, 2)
 
         # obtaining the output and the attention scores
