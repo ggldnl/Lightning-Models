@@ -64,6 +64,6 @@ class PositionalEncoding(nn.Module):
         self.register_buffer('pe', pe)
 
     def forward(self, x):
-        # adding positional encoding to the input tensor X
+        # Adding positional encoding to the input tensor X
         x = x + (self.pe[:, :x.shape[1], :].requires_grad_(False))
-        return self.dropout(x)  # dropout for regularization
+        return self.dropout(x)  # Dropout for regularization
