@@ -172,9 +172,10 @@ class POITokenizer:
     def get_encoder_mask(self, encoder_input):
         return (encoder_input != self.pad_token_id).unsqueeze(0).unsqueeze(0).type(torch.int64)
 
-    def causal_mask(self, size):
+    @staticmethod
+    def causal_mask(size):
         mask = torch.triu(torch.ones(1, size, size), diagonal=1).type(torch.int64)
-        return mask == self.pad_token_id
+        return mask == 0
 
     def get_decoder_mask(self, decoder_input):
         return (decoder_input != self.pad_token_id).unsqueeze(0).unsqueeze(0).type(torch.int64) & self.causal_mask(decoder_input.size(0))
