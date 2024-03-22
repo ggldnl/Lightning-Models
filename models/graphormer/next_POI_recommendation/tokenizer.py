@@ -1,3 +1,4 @@
+import random
 import pickle
 import torch
 import os
@@ -11,7 +12,7 @@ class POITokenizer:
                  sos_token='[SOS]',
                  eos_token='[EOS]',
                  msk_token='[MSK]',
-                 min_frequency=2
+                 min_frequency=1
                  ):
 
         self.unk_token = unk_token
@@ -74,7 +75,7 @@ class POITokenizer:
     def tokens_to_ids(self, tokens):
         return [self.poi2index[token] for token in tokens]
 
-    def get_encoder_input(self, sequence, max_seq_len=None):
+    def get_encoder_input(self, sequence, max_seq_len=None, mask_percent=0.0, mask_last_token=False):
         """
         Given a sequence, produces the input for the encoder. SOS and EOS tokens
         are added respectively to the start and the end of the sequence for the
@@ -85,6 +86,14 @@ class POITokenizer:
         # Convert the sequence into tokens and then into ids
         sequence_tokens = self.sequence_to_tokens(sequence)
         sequence_ids = self.tokens_to_ids(sequence_tokens)
+
+        if mask_percent > 0.0:
+            mask_ids = random.sample(sequence_ids, int(len(sequence_ids) * mask_percent))
+            for index in mask_ids:
+                sequence_ids[index] = self.msk_token_id
+
+        if mask_last_token:
+            sequence_ids[-1] = self.msk_token_id
 
         if max_seq_len is None:
             max_seq_len = len(sequence_ids) + 2
@@ -163,11 +172,11 @@ class POITokenizer:
     def get_encoder_mask(self, encoder_input):
         return (encoder_input != self.pad_token_id).unsqueeze(0).unsqueeze(0).type(torch.int64)
 
-    @staticmethod
-    def casual_mask(size):
-        # creating a square matrix of dimensions 'size*size' filled with ones
+    # TODO check this
+    def casual_mask(self, size):
+        # Create a square matrix of dimensions 'size*size' filled with ones
         mask = torch.triu(torch.ones(1, size, size), diagonal=1).type(torch.int64)
-        return mask == 0
+        return mask == self.pad_token_id
 
     def get_decoder_mask(self, decoder_input):
         return (decoder_input != self.pad_token_id).unsqueeze(0).unsqueeze(0).type(torch.int64) & self.casual_mask(decoder_input.size(0))
