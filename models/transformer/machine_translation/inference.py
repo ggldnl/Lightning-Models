@@ -144,12 +144,13 @@ if __name__ == '__main__':
 
     # Use the model to make inference
     input_text = 'We had been wandering, indeed, in the leafless shrubbery an hour in the morning;'
-    tokenized_input = torch.tensor(source_tokenizer.get_encoder_input(input_text, config.MAX_SEQ_LEN))
+    tokenized_input = source_tokenizer.get_encoder_input(input_text, config.MAX_SEQ_LEN)
     max_output_len = 30
 
-    print(f'Input sentence : {input_text}')
-    print(f'Tokenized input: {tokenized_input}')
-    print(f'Max output len : {max_output_len}')
+    print(f'Input sentence          : {input_text}')
+    print(f'Tokenized input         : {tokenized_input}')
+    print(f'Tokenized input shape   : {tokenized_input.shape}')
+    print(f'Max output len          : {max_output_len}')
     print(f'-' * 100)
 
     model_output = transformer.translate(

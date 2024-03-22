@@ -9,6 +9,7 @@ from models.transformer.model import LightningTransformer
 from models.transformer.blocks.encoder import Encoder
 from models.transformer.blocks.decoder import Decoder
 from models.transformer.model import Transformer
+from models.transformer.cosine_warmup import CosineWarmupScheduler
 from tokenizer import WordLevelTokenizer
 from data import OPUSDataModule
 import pytorch_lightning as pl
@@ -150,18 +151,24 @@ if __name__ == '__main__':
         config.MAX_SEQ_LEN,
         config.MAX_SEQ_LEN
     )
-    print('Model created')
 
     # Criterion, Optimizer and Scheduler
     criterion = nn.CrossEntropyLoss(
         ignore_index=source_tokenizer.pad_token_id,
         label_smoothing=0.1
     )
+    print(f'Using:')
+    print(f'    Cross Entropy Loss criterion')
+
     optimizer = Adam(transformer.parameters(), lr=1e-4)
-    scheduler = None
+    print(f'    Adam optimizer')
+
+    scheduler = CosineWarmupScheduler(optimizer, warmup=100, max_iters=2000)
+    print(f'    Cosine warmup scheduler')
 
     # Initialize the Lightning model
     model = LightningTransformer(transformer, criterion, optimizer, scheduler)
+    print(f'Initialized pytorch lightning model')
 
     # Initialize the Trainer
     trainer = pl.Trainer(max_epochs=config.NUM_EPOCHS)
