@@ -49,9 +49,8 @@ class FoursquareDataset(Dataset):
             }
 
         # Tokenize the sequences and convert them to ids
-        # TODO check the mask
-        encoder_input = self.source_tokenizer.get_encoder_input(poi_sequence, self.max_seq_len)
-        decoder_input = self.target_tokenizer.get_decoder_input(poi_sequence, self.max_seq_len, mask=True)
+        encoder_input = self.source_tokenizer.get_encoder_input(poi_sequence, self.max_seq_len, mask_percent=0.15)
+        decoder_input = self.target_tokenizer.get_decoder_input(poi_sequence, self.max_seq_len)
         encoder_mask = self.source_tokenizer.get_encoder_mask(encoder_input)
         decoder_mask = self.target_tokenizer.get_decoder_mask(decoder_input)
         label = self.target_tokenizer.get_label(poi_sequence, self.max_seq_len)
