@@ -178,13 +178,12 @@ class WordLevelTokenizer:
         return (encoder_input != self.pad_token_id).unsqueeze(0).unsqueeze(0).type(torch.int64)
 
     @staticmethod
-    def casual_mask(size):
-        # creating a square matrix of dimensions 'size*size' filled with ones
+    def causal_mask(size):
         mask = torch.triu(torch.ones(1, size, size), diagonal=1).type(torch.int64)
         return mask == 0
 
     def get_decoder_mask(self, decoder_input):
-        return (decoder_input != self.pad_token_id).unsqueeze(0).unsqueeze(0).type(torch.int64) & self.casual_mask(decoder_input.size(0))
+        return (decoder_input != self.pad_token_id).unsqueeze(0).unsqueeze(0).type(torch.int64) & self.causal_mask(decoder_input.size(0))
 
     def encode(self, sentence):
         """
