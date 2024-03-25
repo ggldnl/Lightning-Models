@@ -1,2 +1,8 @@
-# Lightning-Models
-Collection of machine learning models implemented using pytorch lightning
+# Transformer
+
+Pytorch lightning implementation of the original Transformer architecture 
+as described in the [Attention Is All You Need](https://arxiv.org/abs/1706.03762) paper.
+Along with the architecture, the repo contains the code to run training and inference on
+a machine translation task to translate from english to italian. The code for a Tokenizer 
+and a dataloader are provided as well. The dataloader uses the [OPUS Books](https://huggingface.co/datasets/opus_books)
+dataset.

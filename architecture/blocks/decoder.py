@@ -1,4 +1,4 @@
-from models.transformer.blocks.layer_normalization import LayerNormalization
+from architecture.blocks.layer_normalization import LayerNormalization
 import torch.nn as nn
 
 

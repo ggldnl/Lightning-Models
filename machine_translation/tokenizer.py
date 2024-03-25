@@ -273,8 +273,8 @@ class WordLevelTokenizer:
 
 if __name__ == '__main__':
 
-    from models.transformer.machine_translation.data import OPUSDataModule
-    import models.transformer.machine_translation.config as config
+    from machine_translation.data import OPUSDataModule
+    import machine_translation.config as config
 
     def create_tokenizer(stage='source'):  # stage = ['source', 'target']
 

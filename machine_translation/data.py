@@ -222,7 +222,7 @@ class OPUSDataModule(pl.LightningDataModule):
 
 if __name__ == '__main__':
 
-    from models.transformer.machine_translation.tokenizer import WordLevelTokenizer
+    from machine_translation.tokenizer import WordLevelTokenizer
 
     # Use txt for better interpretability
     source_tokenizer_path = os.path.join(config.TOK_DIR, r'tokenizer_source.txt')
